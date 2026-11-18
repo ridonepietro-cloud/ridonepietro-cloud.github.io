@@ -1,0 +1,951 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Petri Dash</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap">
+<style>
+/* Layout: three screens (title, overworld, stage). The overworld is one wide pixel canvas over a dialog box; the stage is the dish beside the cell / shop / lab pane.
+   One visual world on purpose: a dark cartridge-era console, cream ink, coin-yellow accent, chunky black frames. All art is drawn in code on low-resolution canvases and scaled with hard pixels. */
+:root {
+  color-scheme: dark;
+  --bg: #14112a; --bg2: #1c1838; --panel: #27224a; --panel2: #373067; --ink: #f6f1dd; --mute: #b8b1d6; --line: #5c5592; --edge: #090714;
+  --gold: #ffd23f; --gold-d: #b87a0a; --on-gold: #2a1a00; --sky: #5ad1ff; --ok: #5be37d; --hot: #ff6b5d;
+  --good-bg: #12402a; --good-ink: #a6f5c0; --bad-bg: #4a1a1a; --bad-ink: #ffc2b8; --info-bg: #1b2a5e; --info-ink: #c5d6ff;
+  --f-display: "Press Start 2P", "Courier New", monospace; --f-body: "VT323", "Courier New", monospace;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { background: var(--bg); color: var(--ink); }
+body { font-family: var(--f-body); font-size: 21px; line-height: 1.15; background-image: linear-gradient(rgba(255,255,255,.025) 2px, transparent 2px), linear-gradient(90deg, rgba(255,255,255,.025) 2px, transparent 2px); background-size: 16px 16px; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-block: 14px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 14px; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 400; margin: 0; line-height: 1.5; text-wrap: balance; }
+h2 { font-size: 14px; } h3 { font-size: 12px; }
+p { margin: 0; }
+button { font: inherit; color: inherit; cursor: pointer; }
+canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; max-width: 100%; }
+.mute, .note { color: var(--mute); }
+.note { font-size: 18px; }
+.card { background: var(--panel); border: 4px solid var(--edge); box-shadow: inset 4px 4px 0 rgba(255,255,255,.07), inset -4px -4px 0 rgba(0,0,0,.28); padding: 14px; }
+.btn { font-family: var(--f-display); font-size: 10px; line-height: 1.4; text-transform: uppercase; padding: 10px 12px; min-height: 42px; background: var(--panel2); color: var(--ink); border: 4px solid var(--edge); box-shadow: inset -4px -4px 0 rgba(0,0,0,.35), inset 4px 4px 0 rgba(255,255,255,.14); }
+.btn:hover:not(:disabled) { filter: brightness(1.15); }
+.btn:active:not(:disabled) { transform: translateY(2px); box-shadow: inset 4px 4px 0 rgba(0,0,0,.35); }
+.btn.pri { background: var(--gold); color: var(--on-gold); }
+.btn.big { font-size: 12px; padding: 14px 18px; min-height: 52px; }
+.btn.sm { font-size: 8px; padding: 6px 8px; min-height: 32px; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn small { display: block; font-family: var(--f-body); font-size: 16px; text-transform: none; opacity: .85; }
+a.btn { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; text-decoration: none; }
+.vault { display: grid; gap: 10px; padding: 12px; background: var(--panel2); border: 4px solid var(--edge); }
+.vault h3 { color: var(--gold); }
+.vault textarea { box-sizing: border-box; width: 100%; min-height: 76px; resize: vertical; font-family: var(--f-body); font-size: 16px; line-height: 1.2; padding: 8px; background: var(--edge); color: var(--ink); border: 2px solid var(--line); border-radius: 0; }
+.bankmsg { font-size: 18px; min-width: 0; }
+.bankmsg.ok { color: var(--ok); }
+.bankmsg.bad { color: var(--hot); }
+.btn:focus-visible, .seg button:focus-visible, input:focus-visible, textarea:focus-visible, canvas:focus-visible { outline: 3px solid var(--sky); outline-offset: 2px; }
+.seg { justify-self: start; max-width: 100%; display: inline-flex; flex-wrap: wrap; border: 4px solid var(--edge); background: var(--panel); }
+.seg button { border: 0; background: transparent; padding: 8px 10px; min-height: 38px; font-family: var(--f-display); font-size: 9px; text-transform: uppercase; }
+.seg button[aria-pressed="true"] { background: var(--gold); color: var(--on-gold); }
+.seg button + button { border-left: 4px solid var(--edge); }
+
+.top { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; }
+.brand { font-family: var(--f-display); font-size: 14px; color: var(--gold); text-shadow: 2px 2px 0 var(--gold-d); display: flex; align-items: center; gap: 10px; }
+.tag { font-size: 8px; color: var(--mute); border: 2px solid var(--line); padding: 3px 6px; text-shadow: none; }
+.wallet { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.coin { display: inline-flex; align-items: center; gap: 8px; background: var(--edge); border: 2px solid var(--line); padding: 4px 10px; font-size: 22px; }
+.coin b { font-weight: 400; color: var(--gold); }
+.ico { width: 14px; height: 14px; flex: none; }
+
+/* title */
+#title { display: grid; gap: 18px; justify-items: center; text-align: center; }
+.logo { font-size: clamp(26px, 7.2vw, 64px); color: var(--gold); text-shadow: 4px 4px 0 #d9481f, 8px 8px 0 var(--edge); letter-spacing: 2px; line-height: 1.2; }
+.sub { font-family: var(--f-display); font-size: clamp(8px, 1.6vw, 12px); color: var(--sky); line-height: 1.8; }
+.blink { font-family: var(--f-display); font-size: 12px; color: var(--ink); animation: blink 1s steps(2, jump-none) infinite; }
+@keyframes blink { 50% { opacity: .15; } }
+.starters { display: grid; grid-template-columns: repeat(auto-fit, minmax(236px, 1fr)); gap: 14px; width: 100%; text-align: left; }
+.starter { display: grid; gap: 10px; align-content: start; justify-items: start; }
+.starter .stage { justify-self: stretch; display: grid; place-items: center; background: var(--edge); border: 2px solid var(--line); padding: 8px; background-image: radial-gradient(rgba(90,209,255,.18) 1px, transparent 1px); background-size: 8px 8px; }
+.starter canvas { width: 216px; height: 144px; }
+.starter h2 { font-size: 16px; color: var(--gold); }
+.perk b { color: var(--sky); font-weight: 400; }
+.cont { display: grid; gap: 8px; justify-items: center; }
+
+/* stat rows */
+.stats { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; width: 100%; }
+.stats li { display: grid; grid-template-columns: minmax(0, 9.5rem) minmax(0, 1fr) 1.4rem; gap: 8px; align-items: center; font-size: 19px; }
+.pips { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; }
+.pips i { height: 10px; background: var(--edge); border: 1px solid var(--line); }
+.pips i.b { background: var(--ink); border-color: var(--ink); }
+.pips i.u { background: var(--sky); border-color: var(--sky); }
+.stats .n { text-align: right; color: var(--gold); }
+
+/* overworld */
+.frame { justify-self: center; border: 4px solid var(--edge); box-shadow: 0 0 0 4px var(--line), 0 0 0 8px var(--edge); margin: 8px; max-width: calc(100% - 16px); background: #000; }
+.reveal { animation: iris .7s steps(14, end) both; }
+@keyframes iris { from { clip-path: circle(0% at 50% 45%); } to { clip-path: circle(120% at 50% 45%); } }
+#world { cursor: pointer; touch-action: manipulation; }
+.grid { display: grid; grid-template-columns: minmax(0, 560px) minmax(0, 1fr); gap: 14px; align-items: start; }
+.col { display: grid; gap: 12px; min-width: 0; }
+.dlg { display: grid; gap: 10px; }
+.dlg h2 { color: var(--gold); }
+.chip { justify-self: start; font-family: var(--f-display); font-size: 8px; padding: 4px 8px; border: 2px solid currentColor; }
+.chip.ok { color: var(--ok); } .chip.open { color: var(--gold); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.msg { color: var(--hot); min-height: 1.2em; }
+
+/* stage */
+.hud { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.hud h2 { color: var(--gold); }
+.heat { display: grid; justify-items: end; gap: 6px; flex: none; }
+.heat .hp { display: flex; gap: 4px; }
+.heat .hp i { width: 14px; height: 10px; background: var(--edge); border: 2px solid var(--line); }
+.heat .hp i.w { background: var(--ok); border-color: var(--ok); }
+.heat .hp i.l { background: var(--hot); border-color: var(--hot); }
+#clock { font-family: var(--f-display); font-size: 12px; }
+.dishframe { display: grid; place-items: center; background: var(--edge); border: 2px solid var(--line); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 18px; }
+.legend li { display: flex; gap: 6px; align-items: center; }
+.legend canvas { width: 24px; height: 24px; border: 2px solid var(--edge); }
+.legend span { color: var(--mute); }
+.fb { padding: 10px 12px; border: 4px solid var(--edge); margin-top: 10px; }
+.fb b { display: block; font-family: var(--f-display); font-size: 11px; font-weight: 400; line-height: 1.6; }
+.fb.good { background: var(--good-bg); color: var(--good-ink); }
+.fb.bad { background: var(--bad-bg); color: var(--bad-ink); }
+.fb.info { background: var(--info-bg); color: var(--info-ink); }
+.ctl { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.stand { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.stand li { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 10px; align-items: center; background: var(--panel); border: 4px solid var(--edge); padding: 6px 10px; }
+.stand .who b { font-family: var(--f-display); font-size: 10px; font-weight: 400; }
+.stand .who span { display: block; font-size: 17px; color: var(--mute); }
+.stand .live { text-align: right; font-size: 17px; color: var(--mute); }
+.stand .live b { display: block; color: var(--gold); font-weight: 400; font-size: 21px; }
+.stand li.lead { border-color: var(--gold); }
+.hpb { display: block; width: 70px; height: 7px; margin: 2px 0 2px auto; background: var(--edge); border: 1px solid var(--line); }
+.hpb i { display: block; height: 100%; width: 100%; background: var(--ok); }
+.dot { width: 12px; height: 12px; display: inline-block; flex: none; border: 2px solid var(--edge); }
+
+/* pane */
+.pane { display: grid; gap: 14px; }
+.lab { font-family: var(--f-display); font-size: 8px; text-transform: uppercase; color: var(--mute); }
+.field { display: grid; gap: 6px; }
+.cellhead { display: flex; gap: 12px; align-items: center; }
+.cellhead canvas { width: 108px; height: 72px; background: var(--edge); border: 2px solid var(--line); flex: none; }
+.cellhead h3 { font-size: 14px; color: var(--gold); }
+.shop { list-style: none; margin: 0; padding: 0; display: grid; }
+.shop li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; padding: 8px 0; border-top: 2px dashed var(--line); }
+.shop li:first-child { border-top: 0; padding-top: 0; }
+.shop .fx { font-size: 17px; color: var(--mute); }
+.shop .buy { display: grid; justify-items: end; gap: 3px; }
+.shop .price { color: var(--gold); }
+.shop .why { font-size: 16px; color: var(--mute); }
+.shop .kind { font-family: var(--f-display); font-size: 7px; text-transform: uppercase; border: 2px solid var(--line); padding: 2px 4px; color: var(--mute); margin-left: 6px; vertical-align: middle; }
+.est { background: var(--edge); border: 2px solid var(--line); padding: 10px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.est b { display: block; font-family: var(--f-display); font-size: 14px; font-weight: 400; color: var(--gold); line-height: 1.6; }
+.est span { font-size: 16px; color: var(--mute); }
+.sliders { display: grid; gap: 6px; }
+.sliders label { display: grid; grid-template-columns: minmax(0, 9.5rem) minmax(0, 1fr) 1.4rem; gap: 8px; align-items: center; font-size: 19px; }
+.sliders input[type="range"] { width: 100%; accent-color: var(--gold); }
+.check { display: flex; gap: 8px; align-items: center; }
+.check input { width: 18px; height: 18px; accent-color: var(--gold); }
+@media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .blink, .reveal { animation: none; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><span>PETRI DASH</span><span class="tag">PROTOTYPE</span></div>
+    <div class="wallet">
+      <span class="coin"><svg class="ico" viewBox="0 0 7 7" shape-rendering="crispEdges" aria-hidden="true"><path d="M2 0h3v1h1v1h1v3h-1v1h-1v1h-3v-1h-1v-1h-1v-3h1v-1h1z" fill="#ffd23f"/><path d="M3 2h1v3h-1z" fill="#b87a0a"/></svg><b id="wPts">0</b> points</span>
+      <span class="coin"><svg class="ico" viewBox="0 0 7 7" shape-rendering="crispEdges" aria-hidden="true"><path d="M3 0h1v2h3v1h-1v2h1v2h-1v-1h-1v-1h-1v1h-1v1h-1v-2h1v-2h-1v-1h3z" fill="#ffd23f"/></svg><b id="wStars">0</b> stars</span>
+      <button class="btn" id="earn" type="button">Test top-up<small>+500 points, +10 stars</small></button>
+    </div>
+  </header>
+  <p class="note">Points and stars are earned in Petri Dash Vault and banked from the Shop tab. The test top-up is only here for trying the shop while this is a prototype.</p>
+
+  <section id="title"></section>
+
+  <section id="map" hidden>
+    <div class="col">
+      <div class="frame" id="worldFrame"><canvas id="world" width="320" height="216" tabindex="0" role="img" aria-label="World map: a route leads from the Atlas Lab in Sydney to stages in the Sahara, the Amazon, Iceland and Antarctica"></canvas></div>
+      <div class="grid">
+        <div class="card dlg" id="nodeBox" role="status" aria-live="polite"></div>
+        <div class="col" id="slotMap"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="stage" hidden>
+    <div class="grid">
+      <div class="col">
+        <div class="card">
+          <div class="hud">
+            <div><h2 id="stName"></h2><p class="mute" id="stBlurb"></p></div>
+            <div class="heat"><span class="hp" id="pips" aria-label="Heats won and lost"></span><span id="clock">0:00</span></div>
+          </div>
+          <div class="dishframe"><canvas id="dish" width="256" height="256" role="img" aria-label="Petri dish with the racing cells"></canvas></div>
+          <ul class="legend" id="legend"></ul>
+          <div class="fb info" id="fb" role="status" aria-live="polite"></div>
+          <div class="ctl">
+            <button class="btn pri big" id="run" type="button">Run stage</button>
+            <button class="btn" id="skip" type="button">Skip</button>
+            <button class="btn" id="toMap" type="button">To the map</button>
+            <div class="seg" id="spd" role="group" aria-label="Playback speed">
+              <button type="button" data-spd="1" aria-pressed="true">1x</button><button type="button" data-spd="2" aria-pressed="false">2x</button><button type="button" data-spd="4" aria-pressed="false">4x</button>
+            </div>
+          </div>
+        </div>
+        <ol class="stand" id="stand"></ol>
+      </div>
+      <div class="col" id="slotStage"></div>
+    </div>
+  </section>
+
+  <div class="col" id="paneWrap" hidden>
+    <div class="seg" id="tabs" role="group" aria-label="Panel">
+      <button type="button" data-tab="cell" aria-pressed="true">Your cell</button><button type="button" data-tab="shop" aria-pressed="false">Shop</button><button type="button" data-tab="lab" aria-pressed="false">Lab bench</button>
+    </div>
+    <div class="card pane" id="pane"></div>
+  </div>
+</div>
+
+<script>
+/* ================================================================ simulation core (no DOM): data tables + run-and-tumble race */
+const PD = (() => {
+  "use strict";
+  const R = 100, START = { x: -80, y: 0 }, GOAL = { x: 55, y: 0, r: 8 }, CAP = 90, DT = 1 / 60;
+  /* every balance number lives here so the Lab panel and the design doc can be kept in step */
+  const TUNE = { v0: 6, vPer: 2, gain: 0.4, mem: 0.35, dr: 0.12, tumble: 0.15, highFuel: 1.25, perk: 0.3, twitch: 4, glide: 8, softSwim: 0.2, firmSwim: 0.05,
+    stress: 5, calm: 0.6, escape: 1.5, escapeMax: 0.85, adaptSlow: 6, adaptFast: 1.2, goalLock: 0.8, afterglow: 1.12, glowTime: 8, foodPull: 1.1, drain: 18, regen: 10, hpSlow: 0.3, efflux: 0.5 };
+  const STAT_KEYS = ["speed", "torque", "sensing", "fuel", "thermal"];
+  const STAT_NAMES = { speed: "Speed", torque: "Torque", sensing: "Sensing", fuel: "Fuel economy", thermal: "Thermal tolerance" };
+  const STAT_HELP = { speed: "Run speed in plain medium", torque: "Resists gel and mucus", sensing: "How well it holds a course to the goal", fuel: "Resists low-fuel patches", thermal: "Resists hot and cold zones" };
+  /* run = the cell's own mean run between tumbles, in seconds. It is a trait, not a setting: harm shortens runs, food lengthens them. */
+  const STARTERS = {
+    bacillus: { name: "Bacillus", phylum: "Bacillota", stats: { speed: 3, torque: 3, sensing: 4, fuel: 3, thermal: 2 }, run: 1.0, perk: "low", perkName: "Dual fuel", perkText: "Two stator types, proton and sodium. Low-fuel patches slow it less.", home: 1, shape: "rod" },
+    spirochaeta: { name: "Spirochaeta", phylum: "Spirochaetota", stats: { speed: 3, torque: 5, sensing: 3, fuel: 2, thermal: 2 }, run: 1.5, perk: "gel", perkName: "Corkscrew", perkText: "Periplasmic flagella turn the whole helical body. Gel and mucus slow it less.", home: 2, shape: "wave" },
+    aquifex: { name: "Aquifex", phylum: "Aquificota", stats: { speed: 4, torque: 2, sensing: 3, fuel: 2, thermal: 4 }, run: 0.8, perk: "hot", perkName: "Vent-born", perkText: "A hyperthermophile. Hot zones slow it less (cold zones still bite).", home: 3, shape: "rod" },
+    /* LUCA: stats read off the root of the pruned GTDB v232 species tree in the NODE-MSA Atlas (node d__Bacteria): one compact flagellar stator lineage present with probability 1.0,
+       1.63 stator-like systems expected in all, no gliding motor, a 257-residue reconstructed stator A subunit with warm-adapted composition. 13 points, not 15: it predates every specialisation. */
+    luca: { name: "LUCA", phylum: "Root of the bacterial tree", stats: { speed: 3, torque: 2, sensing: 2, fuel: 2, thermal: 4 }, run: 1.0, perk: null, discount: 0.75, perkName: "Root stock", perkText: "Reconstructed ancestor with one compact flagellar stator and no specialisation. Every modern motor elaborates this one, so all parts cost 25% less.", home: 0, shape: "rod" }
+  };
+  const RIVALS = {
+    ecoli: { name: "E. coli K-12", stats: { speed: 4, torque: 3, sensing: 4, fuel: 3, thermal: 3 }, run: 1.0, note: "The generalist baseline" },
+    helico: { name: "Helicobacter", stats: { speed: 4, torque: 7, sensing: 4, fuel: 3, thermal: 3 }, run: 1.3, note: "High-torque motor, built for mucus" },
+    vibrio: { name: "Vibrio", stats: { speed: 7, torque: 3, sensing: 4, fuel: 4, thermal: 4 }, run: 0.7, note: "Sprinter with a sodium-driven polar flagellum" },
+    thermotoga: { name: "Thermotoga", stats: { speed: 5, torque: 3, sensing: 4, fuel: 3, thermal: 8 }, run: 1.0, note: "Hyperthermophile, at home in the hot core" },
+    proteus: { name: "Proteus", stats: { speed: 7, torque: 4, sensing: 4, fuel: 4, thermal: 4 }, run: 1.2, module: "swarm", note: "Swarms over soft surfaces" },
+    pseudomonas: { name: "Pseudomonas", stats: { speed: 6, torque: 4, sensing: 5, fuel: 4, thermal: 4 }, run: 0.9, module: "twitch", note: "Twitches across any surface on type IV pili" }
+  };
+  const E = (kind, s, cx, cy, rx, ry, rot, extra) => Object.assign({ kind, s, shape: "ell", cx, cy, rx, ry, rot: rot || 0 }, extra || {});
+  const STAGES = [
+    { id: 1, name: "Starter plate", place: "Sahara", feature: "Fuel", rivals: ["ecoli"], agar: "agar",
+      blurb: "Starved lawns cover the middle of the plate, with a clean channel between them. Fed colonies are scattered like oases.",
+      patches: [E("low", 0.5, -22, -20, 20, 24, 0.3), E("low", 0.5, -4, 30, 26, 18, -0.2), E("low", 0.4, 30, -38, 13, 10), E("low", 0.4, 25, 34, 10, 9), E("low", 0.35, -55, 40, 10, 12),
+        E("high", 0, 10, -70, 17, 15), E("high", 0, 8, 72, 16, 14), E("high", 0, -50, -40, 10, 9), E("high", 0, 18, 2, 8, 8), E("high", 0, 60, -50, 9, 8), E("high", 0, -10, -55, 7, 7)] },
+    { id: 2, name: "Soft agar", place: "Amazon basin", feature: "Viscosity", rivals: ["ecoli", "helico"], agar: "agar2",
+      blurb: "A gel ring surrounds the goal and mucus streaks cross the plate. An antibiotic disc sits near the start: the first toxin.",
+      patches: [{ kind: "gel", s: 0.6, shape: "ring", cx: 55, cy: 0, r0: 22, r1: 38 }, E("gel", 0.4, -32, -26, 9, 36, 0.5), E("gel", 0.4, -12, 38, 8, 30, -0.6), E("gel", 0.5, 8, -52, 13, 9), E("gel", 0.45, -62, 30, 9, 8),
+        E("toxin", 0.6, -38, 8, 9, 9), E("low", 0.4, 12, 8, 10, 12), E("high", 0, -44, 58, 11, 10), E("high", 0, -60, -38, 9, 8), E("high", 0, 14, -22, 7, 7), E("high", 0, 20, 62, 8, 8)] },
+    { id: 3, name: "Vent plate", place: "Iceland", feature: "Temperature", rivals: ["vibrio", "helico", "thermotoga"], agar: "agar3",
+      blurb: "The goal sits in a hot core and the start in a cold zone. Small vents, ice spots and a toxin drop crowd the channel between a gel and a starved patch.",
+      patches: [E("hot", 0.6, 55, 0, 38, 38, 0, { goal: true }), E("cold", 0.4, -62, 0, 30, 30), E("cold", 0.45, -22, -64, 14, 11), E("cold", 0.45, -28, 62, 13, 11), E("hot", 0.7, 8, -28, 8, 8), E("hot", 0.7, 7, 37, 9, 8),
+        E("gel", 0.5, -16, -30, 13, 18), E("low", 0.5, -19, 30, 13, 16), E("toxin", 0.6, -4, -2, 6, 6), E("high", 0, -42, -40, 8, 8), E("high", 0, 22, -58, 9, 8), E("high", 0, 20, 60, 9, 8), E("high", 0, -44, 42, 8, 7)] },
+    { id: 4, name: "Colony edge", place: "Antarctica", feature: "Surfaces", rivals: ["proteus", "pseudomonas"], experimental: true, agar: "agar4",
+      blurb: "A belt of firm agar crosses the dish with a soft, wet apron on each side. Toxin drops, an ice patch and a starved lawn sit on and around it.",
+      patches: [{ kind: "soft", s: 0, shape: "band", x0: -26, x1: -3 }, { kind: "soft", s: 0, shape: "band", x0: 3, x1: 26 }, { kind: "firm", s: 0, shape: "band", x0: -3, x1: 3 }, E("low", 0.6, 0, 48, 30, 40),
+        E("toxin", 0.6, -14, -42, 7, 7), E("toxin", 0.6, 15, -8, 6, 6), E("cold", 0.4, 46, -50, 16, 13), E("gel", 0.5, 42, 36, 12, 10), E("high", 0, -55, -35, 11, 10), E("high", 0, -58, 40, 10, 9), E("high", 0, 70, -18, 8, 8)] }
+  ];
+  const TIER_PRICE = [150, 300, 600];
+  const PARTS = [
+    { id: "filament", name: "Extra filaments (FliC)", type: "Motor", stat: "speed", tiers: 3 },
+    { id: "stator", name: "Extra stator units (MotAB)", type: "Motor", stat: "torque", tiers: 3 },
+    { id: "mcp", name: "Larger chemoreceptor array", type: "Cell", stat: "sensing", tiers: 3 },
+    { id: "granule", name: "Storage granules", type: "Cell", stat: "fuel", tiers: 3 },
+    { id: "chaperone", name: "Chaperones and cold-shock proteins", type: "Cell", stat: "thermal", tiers: 3 },
+    { id: "envelope", name: "Thicker cell envelope", type: "Cell", hp: 20, tiers: 3 },
+    { id: "switch", name: "Adaptation enzymes (CheR, CheB)", type: "Cell", effect: "Panic tumbling in a harmful patch fades in about a second, so the cell swims on instead of thrashing", points: 300, after: 1 },
+    { id: "pom", name: "Sodium stator set (PomAB)", type: "Motor", stat: "fuel", plus: 2, stars: 15, after: 1 },
+    { id: "efflux", name: "Efflux pumps (AcrAB-TolC)", type: "Cell", effect: "Toxin slows and wounds the cell half as much", stars: 15, after: 1 },
+    { id: "scaffold", name: "Wide stator scaffold", type: "Motor", stat: "torque", plus: 2, stars: 20, after: 2 },
+    { id: "aer", name: "Energy-taxis receptor (Aer)", type: "Cell", effect: "Fed colonies within reach pull the cell in, and it turns back from low-fuel edges twice as readily", stars: 20, after: 2 },
+    { id: "thermo", name: "Thermosensor", type: "Cell", effect: "Turns back from hot and cold edges twice as readily", stars: 20, after: 2 },
+    { id: "swarm", name: "Swarming kit", type: "Surface", module: "swarm", effect: "Full swim speed on soft surfaces", points: 600, after: 3 },
+    { id: "pili", name: "Type IV pili", type: "Surface", module: "twitch", effect: "Twitches at 4 units per second on any surface; ignores low fuel", points: 400, after: 3 },
+    { id: "glide", name: "Gliding machinery", type: "Surface", module: "glide", effect: "Glides at 8 units per second on any surface", stars: 25, after: 3 }
+  ];
+  const MODULE_NAMES = { swarm: "Swarming", twitch: "Twitching", glide: "Gliding" };
+
+  function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function gauss(rnd) { let u = 0; while (u === 0) u = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(6.283185307 * rnd()); }
+  const clamp10 = v => Math.max(0, Math.min(10, v));
+
+  function inside(p, x, y) {
+    if (p.shape === "ell") { let dx = x - p.cx, dy = y - p.cy; if (p.rot) { const c = Math.cos(p.rot), s = Math.sin(p.rot), t = dx * c + dy * s; dy = dy * c - dx * s; dx = t; } dx /= p.rx; dy /= p.ry; return dx * dx + dy * dy <= 1; }
+    if (p.shape === "ring") { const d = Math.hypot(x - p.cx, y - p.cy); return d >= p.r0 && d <= p.r1; }
+    return x >= p.x0 && x <= p.x1;
+  }
+  /* the one patch rule: m = 1 - s (1 - R/10), plus 0.3 s back for a starter in its home patch type. Toxin has no resisting stat. */
+  function patchMult(spec, kind, s) {
+    if (kind === "toxin") return 1 - s * (spec.efflux ? TUNE.efflux : 1);
+    const st = spec.stats, r = kind === "low" ? st.fuel : kind === "gel" ? st.torque : st.thermal;
+    return 1 - s * (1 - clamp10(r) / 10) + (spec.perk === kind ? TUNE.perk * s : 0);
+  }
+  /* speed, motility mode, harm (what drives panic tumbling) and food at a point */
+  function envAt(spec, stage, x, y) {
+    let m = 1, fuelM = 1, surf = null, where = "", fed = false, hLow = 1, hTherm = 1, hTox = 1, fedIx = -1, dmg = 1;
+    const ps = stage.patches;
+    for (let i = 0; i < ps.length; i++) {
+      const p = ps[i]; if (!inside(p, x, y)) continue;
+      if (p.kind === "high") { m *= TUNE.highFuel; fed = true; fedIx = i; where = where || "high"; }
+      else if (p.kind === "soft") { if (surf !== "firm") surf = "soft"; }
+      else if (p.kind === "firm") surf = "firm";
+      else {
+        const k = patchMult(spec, p.kind, p.s);
+        if (p.kind === "low") { fuelM *= k; if (!p.goal) hLow *= k; }
+        else { m *= k; if (p.kind !== "gel") { dmg *= k; if (!p.goal) { if (p.kind === "toxin") hTox *= k; else hTherm *= k; } } }
+        where = p.kind;
+      }
+    }
+    const v0 = TUNE.v0 + TUNE.vPer * spec.stats.speed;
+    let v = v0 * m * fuelM, mode = "swim";
+    if (surf) {
+      v *= surf === "soft" ? TUNE.softSwim : TUNE.firmSwim; if (!where || where === "high") where = surf;
+      let c = 0;
+      if (spec.module === "swarm") { c = v0 * (surf === "soft" ? 1 : TUNE.firmSwim) * m * fuelM; if (c > v) { v = c; mode = "swarm"; } }
+      else if (spec.module === "twitch") { c = TUNE.twitch * m; if (c > v) { v = c; mode = "twitch"; } }
+      else if (spec.module === "glide") { c = TUNE.glide * m * fuelM; if (c > v) { v = c; mode = "glide"; } }
+    }
+    const lo = 1 - hLow, th = 1 - hTherm, tx = 1 - hTox;
+    return { v, mode, where, fed, fedIx, dmg: 1 - dmg, harm: 1 - hLow * hTherm * hTox, hw: lo * (spec.aer ? 2 : 1) + th * (spec.thermo ? 2 : 1) + tx };
+  }
+
+  function newRace(stage, specs, seed) {
+    const rnd = mulberry32(seed >>> 0), n = specs.length;
+    const cells = specs.map((spec, i) => { const x = START.x, y = START.y + (i - (n - 1) / 2) * 7;
+      return { spec, i, x, y, h: rnd() * 6.283185307, sig: 0, tumble: 0, v: 0, mode: "swim", where: "", harm: 0, fed: false, fedT: 0, stressT: 0, panic: 0, ate: {}, env: envAt(spec, stage, x, y), done: false, hp: spec.maxHp || 100, maxHp: spec.maxHp || 100, dead: false }; });
+    return { stage, cells, rnd, t: 0, done: false, winner: -1, timeout: false };
+  }
+  const distGoal = c => Math.max(0, Math.hypot(c.x - GOAL.x, c.y - GOAL.y) - GOAL.r);
+  function step(race) {
+    if (race.done) return;
+    const rnd = race.rnd, stage = race.stage;
+    let alive = 0;
+    for (const c of race.cells) {
+      if (c.dead) continue;
+      const e = c.env, sp = c.spec; c.mode = e.mode; c.where = e.where; c.harm = e.harm; c.fed = e.fed;
+      /* health: toxin, heat and cold wear the cell down; food restores it; at zero the cell lyses and is out of the heat */
+      if (e.dmg > 0) c.hp -= TUNE.drain * e.dmg * DT;
+      if (e.fed) c.hp = Math.min(c.maxHp, c.hp + TUNE.regen * DT);
+      if (c.hp <= 0) { c.hp = 0; c.dead = true; c.diedIn = e.where; c.tumble = 0; continue; }
+      alive++;
+      if (e.fed) { c.fedT = TUNE.glowTime; c.ate[e.fedIx] = 1; } else if (c.fedT > 0) c.fedT -= DT;                   // a fed cell keeps a little extra speed for a while
+      c.stressT = e.harm > 0.02 ? c.stressT + DT : 0;
+      c.v = e.v * (!e.fed && c.fedT > 0 ? TUNE.afterglow : 1) * (1 - TUNE.hpSlow * (1 - c.hp / c.maxHp));
+      if (c.tumble > 0) { c.tumble -= DT; continue; }
+      const nx = c.x + Math.cos(c.h) * c.v * DT, ny = c.y + Math.sin(c.h) * c.v * DT;
+      if (Math.hypot(nx, ny) > R - 2) { c.h = Math.atan2(-ny, -nx) + (rnd() - 0.5) * 2.4; c.tumble = TUNE.tumble; continue; }   // the dish wall: turn back in
+      const e2 = envAt(sp, stage, nx, ny), rise = e2.hw - e.hw;
+      if (rise > 0.02 && rnd() < Math.min(TUNE.escapeMax, TUNE.escape * rise)) { c.h += Math.PI + gauss(rnd) * 0.5; c.tumble = TUNE.tumble; continue; }   // harm ahead: flick back
+      c.x = nx; c.y = ny; c.env = e2;
+      const dg = Math.hypot(c.x - GOAL.x, c.y - GOAL.y);
+      if (dg <= GOAL.r) { race.done = true; race.winner = c.i; c.done = true; break; }
+      c.h += gauss(rnd) * Math.sqrt(2 * TUNE.dr * DT);
+      let cs = Math.cos(c.h - Math.atan2(GOAL.y - c.y, GOAL.x - c.x)) * (1 + TUNE.goalLock * Math.exp(-dg / 25));           // +1 heading up the gradient; the pull sharpens close to the goal
+      if (sp.aer) { const ps = stage.patches; for (let i = 0; i < ps.length; i++) { const p = ps[i]; if (p.kind !== "high" || c.ate[i]) continue; const d = Math.hypot(p.cx - c.x, p.cy - c.y), r = Math.max(p.rx, p.ry); if (d < r * 2.6) cs += TUNE.foodPull * Math.cos(c.h - Math.atan2(p.cy - c.y, p.cx - c.x)) * (1 - d / (r * 2.6)); } }
+      c.sig += (cs - c.sig) * DT / TUNE.mem;
+      c.panic = TUNE.stress * e2.harm * Math.exp(-c.stressT / (sp.adapt ? TUNE.adaptFast : TUNE.adaptSlow));               // harm multiplies the tumble rate; the cell adapts over time
+      const rate = Math.exp(-TUNE.gain * sp.stats.sensing * c.sig) / sp.run * (1 + c.panic) * (e2.fed ? 1 - TUNE.calm : 1);   // food calms it
+      if (rnd() < rate * DT) {
+        c.tumble = TUNE.tumble;
+        if (c.mode === "twitch" || c.mode === "glide") c.h += Math.PI + gauss(rnd) * 0.6;       // surface cells reverse instead of tumbling
+        else c.h += (rnd() < 0.5 ? -1 : 1) * Math.max(0.2, Math.min(3.0, 1.19 + gauss(rnd) * 0.63));
+      }
+    }
+    race.t += DT;
+    if (!race.done && (race.t >= CAP || !alive)) {                         // nobody arrived: the closest survivor takes the heat, or the closest wreck if none survived
+      race.done = true; race.timeout = true; const rank = c => distGoal(c) + (c.dead ? 1000 : 0); let best = 0;
+      race.cells.forEach(c => { if (rank(c) < rank(race.cells[best])) best = c.i; }); race.winner = best;
+    }
+  }
+  function simulate(stage, specs, seed) { const r = newRace(stage, specs, seed); while (!r.done) step(r); return r; }
+
+  /* the player's cell as a spec: starter + bought tiers + star parts */
+  function playerSpec(save) {
+    const s = STARTERS[save.starter], stats = Object.assign({}, s.stats); let run = s.run, maxHp = 100;
+    for (const p of PARTS) {
+      if (p.hp) maxHp += p.hp * ((save.tiers && save.tiers[p.id]) || 0);
+      else if (p.tiers) stats[p.stat] += (save.tiers && save.tiers[p.id]) || 0;
+      else if (p.plus && save.owned && save.owned[p.id]) stats[p.stat] += p.plus;
+    }
+    if (save.override) { for (const k of STAT_KEYS) stats[k] = save.override[k]; if (save.override.run) run = save.override.run; }
+    const own = save.owned || {}, mod = save.module && PARTS.some(p => p.module === save.module && own[p.id]) ? save.module : null;
+    return { name: s.name, isPlayer: true, shape: s.shape, stats, perk: s.perk, run, maxHp, module: mod, aer: !!own.aer, thermo: !!own.thermo, adapt: !!own.switch, efflux: !!own.efflux };
+  }
+  function rivalSpec(id) { const r = RIVALS[id]; return { name: r.name, id, shape: "rod", stats: r.stats, perk: null, run: r.run, maxHp: r.hp || 100, module: r.module || null, aer: false, thermo: false, adapt: false, efflux: false }; }
+  function lineup(save, stage) { return [playerSpec(save)].concat(stage.rivals.map(rivalSpec)); }
+  /* Monte Carlo: how often the player (cell 0) wins a heat, and a best-of-three */
+  function estimate(save, stage, n, seed0) {
+    const specs = lineup(save, stage), times = []; let wins = 0, timeouts = 0, deaths = 0;
+    for (let k = 0; k < n; k++) { const r = simulate(stage, specs, (seed0 || 1) + k * 7919); if (r.winner === 0) wins++; if (r.timeout) timeouts++; if (r.cells[0].dead) deaths++; times.push(r.t); }
+    times.sort((a, b) => a - b); const p = wins / n;
+    return { heat: p, series: p * p * (3 - 2 * p), median: times[Math.floor(n / 2)], timeouts: timeouts / n, deaths: deaths / n };
+  }
+  return { R, START, GOAL, CAP, DT, TUNE, STAT_KEYS, STAT_NAMES, STAT_HELP, STARTERS, RIVALS, STAGES, PARTS, TIER_PRICE, MODULE_NAMES, inside, patchMult, envAt, newRace, step, simulate, distGoal, playerSpec, rivalSpec, lineup, estimate };
+})();
+if (typeof module !== "undefined") module.exports = PD;
+
+</script>
+<script>
+"use strict";
+/* ================================================================ helpers, save */
+const $ = (s, e) => (e || document).querySelector(s), $$ = (s, e) => Array.from((e || document).querySelectorAll(s));
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const KEY = "petridash.v1";
+const REDUCE = (() => { try { return matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) { return false; } })();
+const fresh = () => ({ starter: null, tiers: {}, owned: {}, dial: "medium", module: null, points: 0, stars: 0, won: 0, override: null, at: 0, banked: [] });
+const VAULT_URL = "../petri-dash-vault/";
+function loadSave() { try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+function persist() { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) { } }
+let save = Object.assign(fresh(), loadSave() || {});
+const maxNode = () => Math.min(4, save.won + 1);
+save.at = Math.max(0, Math.min(maxNode(), save.at | 0));
+const ui = { screen: "title", stage: 0, tab: "cell", race: null, specs: null, trails: [], steps: 0, heat: 0, wins: 0, losses: 0, phase: "idle", speed: 1, acc: 0, frame: 0, fb: null, est: null,
+  confirmReset: false, confirmPick: null, walk: null, msg: "", bump: -9, unlock: null, terrain: null, terrainFor: 0, world: null, t: 0 };
+const stageNow = () => PD.STAGES[ui.stage];
+
+/* ================================================================ pixel toolkit: palettes, tiles, decorations */
+const OUT = "#1a1226";
+const BUGCOL = { bacillus: { mid: "#9b6bff", hi: "#dccbff", lo: "#5b34b8" }, spirochaeta: { mid: "#34c06e", hi: "#b9f7d1", lo: "#167a40" }, aquifex: { mid: "#ff7a3d", hi: "#ffdc8f", lo: "#b8321a" }, luca: { mid: "#8fe3dc", hi: "#ffffff", lo: "#3a958f" } };
+const RIVCOL = { ecoli: { mid: "#ff6fa8", hi: "#ffd3e4", lo: "#b0305f" }, helico: { mid: "#4aa8ff", hi: "#cbe6ff", lo: "#1f5fa8" }, vibrio: { mid: "#ffe14d", hi: "#fff8c9", lo: "#b08a12" }, thermotoga: { mid: "#f4f0e0", hi: "#ffffff", lo: "#9a94a8" }, proteus: { mid: "#ffe14d", hi: "#fff8c9", lo: "#b08a12" }, pseudomonas: { mid: "#ff6fa8", hi: "#ffd3e4", lo: "#b0305f" } };
+const cellCol = spec => spec.isPlayer ? BUGCOL[save.starter] : RIVCOL[spec.id];
+/* four tones per terrain: base, dark, light, outline */
+const PAL = {
+  agar: ["#e9d9a2", "#d2bb78", "#f8efc9", "#a98f4e"], low: ["#c9a36b", "#a47a44", "#e0c390", "#6f4e26"], high: ["#86d46c", "#58ac4c", "#baf09e", "#2c7436"],
+  gel: ["#74b3c7", "#548ea5", "#bde5ef", "#2c5b70"], hot: ["#d8452b", "#8c1f1a", "#ffb03a", "#470f0f"], cold: ["#bfe6ff", "#8fcaf2", "#ffffff", "#4a80b2"],
+  soft: ["#ab9068", "#8a7150", "#cbb387", "#5a462d"], firm: ["#8d7a68", "#66574a", "#ad9b88", "#392f27"],
+  grass: ["#7fc95e", "#62ad48", "#a9e486", "#2f6a2c"], tall: ["#4f9e44", "#3a8236", "#73c05c", "#245424"], sand: ["#f0dc9a", "#d8bf78", "#fff4c8", "#b3954c"], basalt: ["#5c4a55", "#41333d", "#7b6773", "#261c24"],
+  toxin: ["#c4a8f0", "#9a7bdc", "#e9dcff", "#4b2f8f"], agar2: ["#f1d3d0", "#ddb3b4", "#fbe9e6", "#a8747e"], agar3: ["#d3e6c4", "#b7d0a3", "#edf7e2", "#7d9a66"], agar4: ["#d9dde8", "#bcc3d3", "#f1f3f9", "#8089a0"]
+};
+const rgb = h => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+const PALRGB = {}; for (const k in PAL) PALRGB[k] = PAL[k].map(rgb);
+const SEA = ["#2658a8", "#1e4a94", "#4c86dd", "#5fa8ee", "#e2f4ff"].map(rgb), RIM = ["#aebfe0", "#7f90b8", "#eaf1ff", "#2d2a4c"].map(rgb), BENCH = ["#1b1832", "#201c3a", "#151227"].map(rgb), CLIFF = ["#6b5646", "#52412f", "#33271c"].map(rgb);
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
+function hash(x, y, s) { let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(s | 0, 1442695041)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+/* which of the four tones a pixel of an 8 x 8 tile takes */
+function tileIx(kind, x, y, f) {
+  const lx = x & 7, ly = y & 7, tx = x >> 3, ty = y >> 3, h = hash(x, y, 1), th = hash(tx, ty, 2);
+  switch (kind) {
+    case "low": { if (th < 0.6) { const d = lx - ly + (((th * 30) | 0) % 3) - 1; if (d === 0 && lx > 0 && lx < 7) return 1; } return h < 0.05 ? 2 : h > 0.96 ? 1 : 0; }      // cracked dry ground
+    case "high": return ((x + y) & 1) === 0 && th < 0.5 ? 1 : h > 0.93 ? 2 : 0;                                                                              // lush dither
+    case "gel": { const o = (lx + f * 2 + (ty & 1) * 4) & 7; if (ly === 2) return o < 4 ? 2 : 0; if (ly === 3) return o < 4 ? 0 : 1; if (ly === 6) return ((o + 4) & 7) < 3 ? 2 : 0; return 0; }   // slow waves
+    case "hot": { const o = (lx * 3 + ly * 5 + f * 3 + ((th * 8) | 0)) & 7; return o < 2 ? 2 : h < 0.12 ? 1 : 0; }                                           // flowing lava
+    case "cold": { const d = (lx + ly) & 7; return d === 0 ? 2 : d === 4 ? 1 : h > 0.96 ? 2 : 0; }                                                          // ice glints
+    case "soft": { const o = (lx + (ly >> 2) * 3 + f) & 7; return (ly & 3) === 1 && o < 5 ? 2 : h < 0.06 ? 1 : 0; }                                         // wet ripples
+    case "firm": case "basalt": { const bx = (lx + (((ty << 1) + (ly >> 2)) & 1) * 4) & 7; if ((ly & 3) === 3 || bx === 7) return 1; return (ly & 3) === 0 && bx < 6 ? 2 : 0; }   // cobbles
+    case "tall": return ((lx + (ly >> 1) * 2) & 3) === 0 ? ((ly & 1) ? 1 : 2) : 0;                                                                          // tufted long grass
+    case "toxin": return (lx & 3) === 1 && (ly & 3) === 1 ? 1 : h > 0.95 ? 2 : 0;                                                                         // a cleared zone, dotted
+    default: if (th < 0.24 && ((lx === 2 && ly === 5) || (lx === 3 && ly === 4) || (lx === 4 && ly === 5))) return 1; return h < 0.04 ? 1 : h > 0.97 ? 2 : 0;   // agar, grass, sand: flecks and tufts
+  }
+}
+const R = (ctx, x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x | 0, y | 0, w, h); };
+/* small sprites that mark what a region is */
+function deco(ctx, kind, x, y, f, v) {
+  switch (kind) {
+    case "low": R(ctx, x + 1, y, 1, 4, "#6f4e26"); R(ctx, x, y, 1, 1, "#6f4e26"); R(ctx, x + 2, y + 1, 1, 1, "#6f4e26"); if (v < 0.4) { R(ctx, x + 4, y + 3, 3, 2, "#f3ead2"); R(ctx, x + 4, y + 4, 3, 1, "#b9a98a"); } break;      // dead stalk, bleached pebble
+    case "high": { const p = f ? "#ffffff" : "#ff9ec2"; R(ctx, x + 1, y, 1, 1, p); R(ctx, x, y + 1, 3, 1, p); R(ctx, x + 1, y + 2, 1, 1, p); R(ctx, x + 1, y + 1, 1, 1, "#ffd23f"); R(ctx, x + 1, y + 3, 1, 2, "#2c7436"); break; }        // sugar flower
+    case "gel": { const o = f && v < 0.5 ? -1 : 0; R(ctx, x + 1, y + o, 2, 1, "#e6f7fb"); R(ctx, x, y + 1 + o, 1, 2, "#e6f7fb"); R(ctx, x + 3, y + 1 + o, 1, 2, "#2c5b70"); R(ctx, x + 1, y + 3 + o, 2, 1, "#2c5b70"); R(ctx, x + 1, y + 1 + o, 1, 1, "#ffffff"); break; }   // bubble
+    case "hot": case "basalt": R(ctx, x + 1, y + 1, 3, 1, "#470f0f"); R(ctx, x, y + 2, 5, 2, "#2a0a0a"); R(ctx, x + 2, y + 1, 1, 1, f ? "#ffe07a" : "#ff8a2a"); R(ctx, x + 2 + (f ? 1 : 0), y - 1 - f, 1, 1, "#ffe9a8"); break;                       // vent with a spark
+    case "cold": R(ctx, x + 1, y, 1, 1, "#ffffff"); R(ctx, x, y + 1, 3, 2, "#ffffff"); R(ctx, x + 1, y + 3, 1, 1, "#8fcaf2"); R(ctx, x + 2, y + 2, 1, 1, "#8fcaf2"); R(ctx, x + 1, y + 1, 1, 1, f ? "#ffffff" : "#bfe6ff"); R(ctx, x - 1, y + 4, 5, 1, "#4a80b2"); break;   // ice crystal
+    case "soft": R(ctx, x + 1, y, 3, 1, "#8fc3d6"); R(ctx, x, y + 1, 5, 1, "#8fc3d6"); R(ctx, x + 1, y + 1, 2, 1, "#dff3f8"); break;                           // puddle
+    case "firm": R(ctx, x + 1, y, 3, 1, "#c4b4a0"); R(ctx, x, y + 1, 5, 2, "#a08d79"); R(ctx, x, y + 3, 5, 1, "#392f27"); break;                             // boulder
+    case "toxin": R(ctx, x, y + 1, 5, 2, "#77718f"); R(ctx, x + 1, y + 1, 1, 1, "#4b2f8f"); R(ctx, x + 3, y + 1, 1, 1, "#4b2f8f"); R(ctx, x + 1, y, 3, 1, "#a09ab5"); break;   // a dead cell
+    default: { const c = v < 0.4 ? ["#fff7d6", "#ffffff", "#c9b06c"] : v < 0.7 ? ["#ffb3cf", "#ffe0ec", "#c8587f"] : ["#fff1a8", "#fffbe0", "#c9a43c"];           // a small colony
+      R(ctx, x + 1, y, 2, 1, c[0]); R(ctx, x, y + 1, 4, 2, c[0]); R(ctx, x + 1, y + 1, 1, 1, c[1]); R(ctx, x, y + 3, 4, 1, c[2]); }
+  }
+}
+
+/* ================================================================ the dish as a tile map */
+const DS = 1.2, DC = 128, KINDS = ["agar", "low", "high", "gel", "hot", "cold", "soft", "firm", "toxin"];
+const DPROB = { agar: 0.1, low: 0.42, high: 0.55, gel: 0.36, hot: 0.42, cold: 0.46, soft: 0.28, firm: 0.3, toxin: 0.3 };
+function regionAt(stage, wx, wy) {
+  let kind = "agar", code = 0, surf = null, sc = 0;
+  for (let i = 0; i < stage.patches.length; i++) { const p = stage.patches[i]; if (!PD.inside(p, wx, wy)) continue;
+    if (p.kind === "soft" || p.kind === "firm") { if (p.kind === "firm" || surf !== "firm") { surf = p.kind; sc = i + 1; } } else { kind = p.kind; code = i + 1; } }
+  if (surf && (kind === "agar" || kind === "low")) return { kind: surf, code: sc + (kind === "low" ? code * 16 : 0), low: kind === "low" };
+  return { kind, code, low: false };
+}
+function buildTerrain(stage) {
+  const N = 256, RP = PD.R * DS, kinds = new Uint8Array(N * N), codes = new Int16Array(N * N).fill(-1), lows = new Uint8Array(N * N);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const dx = x + 0.5 - DC, dy = y + 0.5 - DC; if (dx * dx + dy * dy > RP * RP) continue;
+    const r = regionAt(stage, dx / DS, dy / DS), i = y * N + x; kinds[i] = KINDS.indexOf(r.kind); codes[i] = r.code; lows[i] = r.low ? 1 : 0; }
+  const out = [];
+  for (let f = 0; f < 2; f++) {
+    const cv = document.createElement("canvas"); cv.width = cv.height = N; const ctx = cv.getContext("2d"), img = ctx.createImageData(N, N), d = img.data;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const i = y * N + x, dx = x + 0.5 - DC, dy = y + 0.5 - DC, rr = Math.sqrt(dx * dx + dy * dy); let c;
+      if (codes[i] < 0) {
+        if (rr <= RP + 6) c = rr > RP + 5 ? RIM[3] : dx + dy > 70 ? RIM[1] : rr > RP + 2.5 ? RIM[0] : RIM[2];                                  // glass rim, shaded lower right
+        else c = (x & 15) === 0 || (y & 15) === 0 ? BENCH[2] : ((x >> 4) + (y >> 4)) & 1 ? BENCH[0] : BENCH[1];                               // the bench
+      } else {
+        const k = KINDS[kinds[i]]; let ix = tileIx(k, x, y, f);
+        if ((codes[i + 1] >= 0 && codes[i + 1] !== codes[i]) || (y + 1 < N && codes[i + N] >= 0 && codes[i + N] !== codes[i])) ix = 3;      // dark seam between regions
+        else if (lows[i] && ((x + y) & 3) === 0) c = PALRGB.low[3];
+        else if (ix === 0) { const dg = Math.hypot(dx / DS - PD.GOAL.x, dy / DS - PD.GOAL.y); if (BAYER[(y & 3) * 4 + (x & 3)] < 0.62 * Math.exp(-dg / 36)) ix = 2; else if (rr > RP - 2) ix = 1; }   // attractant as a dither that thickens toward the goal
+        c = c || PALRGB[k === "agar" ? stage.agar : k][ix];
+      }
+      d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; d[i * 4 + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    for (let gy = 6; gy < 248; gy += 11) for (let gx = 6; gx < 248; gx += 11) {
+      const x = gx + ((hash(gx, gy, 5) * 6) | 0), y = gy + ((hash(gx, gy, 6) * 6) | 0), wx = (x + 2 - DC) / DS, wy = (y + 2 - DC) / DS;
+      if (Math.hypot(wx, wy) > PD.R - 7 || Math.hypot(wx - PD.GOAL.x, wy - PD.GOAL.y) < PD.GOAL.r + 6 || Math.hypot(wx - PD.START.x, wy) < 11) continue;
+      const r = regionAt(stage, wx, wy); if (hash(gx, gy, 9) > DPROB[r.kind]) continue;
+      if ([[-3, -3], [5, -3], [-3, 5], [5, 5]].some(o => regionAt(stage, wx + o[0] / DS, wy + o[1] / DS).code !== r.code)) continue;
+      deco(ctx, r.kind, x, y, f, hash(gx, gy, 11));
+    }
+    const ag = PAL[stage.agar], free = (x, y) => codes[y * N + x] === 0;
+    for (let i = 0; i < 34; i++) { const x = Math.round(DC + PD.START.x * DS + 4 + i), y = Math.round(DC + (Math.abs((i % 12) - 6) - 3) * 3); if (free(x, y)) { R(ctx, x, y, 1, 1, ag[3]); R(ctx, x, y + 1, 1, 1, ag[1]); } }   // the inoculation streak
+    for (let a = 0; a < 46; a++) { const ang = hash(a, 3, 41) * 6.2832, rr = RP - 4 - hash(a, 5, 42) * 6, x = Math.round(DC + Math.cos(ang) * rr), y = Math.round(DC + Math.sin(ang) * rr); if (free(x, y) && free(x + 1, y + 1)) { R(ctx, x, y, 2, 2, "#ffffff"); R(ctx, x + 1, y + 1, 1, 1, ag[1]); } }   // condensation under the rim
+    for (const p of stage.patches) if (p.kind === "toxin") { const x = Math.round(DC + p.cx * DS), y = Math.round(DC + p.cy * DS);                              // the antibiotic disc at the centre of each cleared zone
+      R(ctx, x - 2, y - 3, 5, 7, OUT); R(ctx, x - 3, y - 2, 7, 5, OUT); R(ctx, x - 2, y - 2, 5, 5, "#ffffff"); R(ctx, x - 1, y - 1, 1, 3, "#4b2f8f"); R(ctx, x, y - 1, 2, 1, "#4b2f8f"); R(ctx, x + 1, y, 1, 1, "#4b2f8f"); R(ctx, x, y + 1, 2, 1, "#4b2f8f"); }
+    R(ctx, 198, 238, 40, 12, "#2a2440"); R(ctx, 197, 237, 40, 12, "#e8e0c0"); R(ctx, 197, 237, 40, 1, "#ffffff"); for (let k = 0; k < 4; k++) R(ctx, 211 + k * 6, 242 + (k & 1), 4, 1, "#8a7f5a");     // a strip of tape with the plate number
+    DIGITS[stage.id].forEach((row, ry) => { for (let rx = 0; rx < 3; rx++) if (row[rx] === "1") R(ctx, 201 + rx * 2, 239 + ry * 2 - 1, 2, 2, "#3a2f6b"); });
+    out.push(cv);
+  }
+  return out;
+}
+function ringPx(ctx, cx, cy, r, col, step, phase) { ctx.fillStyle = col; const n = Math.max(12, Math.round(r * 6.3)); for (let i = 0; i < n; i++) { if (step && ((i + phase) % step) >= step / 2) continue; const a = i / n * 6.2832; ctx.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r), 1, 1); } }
+function drawRaceCell(ctx, c, col, t) {
+  const x = DC + c.x * DS, y = DC + c.y * DS, dx = Math.cos(c.h), dy = Math.sin(c.h), nx = -dy, ny = dx, moving = c.tumble > 0 || c.dead ? 0 : 1, ph = Math.floor(t * 12), mid = c.dead ? "#8a879c" : col.mid, hi = c.dead ? "#b9b6c8" : col.hi;
+  const dot = (px, py, s, color) => { ctx.fillStyle = color; ctx.fillRect(Math.round(px - s / 2), Math.round(py - s / 2), s, s); };
+  if (c.spec.shape === "wave") {                                                        // spirochaete: the body is the helix
+    const off = i => Math.sin(i * 0.95 - ph * 0.9 * moving) * 1.7;
+    for (let i = -5; i <= 5; i++) dot(x + dx * i + nx * off(i), y + dy * i + ny * off(i), 4, OUT);
+    for (let i = -5; i <= 5; i++) dot(x + dx * i + nx * off(i), y + dy * i + ny * off(i), 2, i > 3 ? hi : mid);
+  } else {
+    if (c.dead) { }
+    else if (c.mode === "twitch") { for (const a of [-0.5, 0, 0.5]) for (let j = 5; j <= 8; j++) dot(x + Math.cos(c.h + a) * j, y + Math.sin(c.h + a) * j, 1, OUT); }
+    else if (c.mode === "glide") { for (let j = 6; j <= 14; j += 2) dot(x - dx * j, y - dy * j, 1, "#f2fbff"); }
+    else if (!moving) { for (const a of [-1, -0.35, 0.35, 1]) for (let j = 4; j <= 7; j++) dot(x - Math.cos(c.h + a) * j, y - Math.sin(c.h + a) * j, 1, OUT); }   // the bundle flies apart in a tumble
+    else for (let j = 4; j <= 10; j++) { const w = Math.sin(j * 1.1 + ph * 1.3) * Math.min(1.7, (j - 3) * 0.5); dot(x - dx * j + nx * w, y - dy * j + ny * w, 1, OUT); }
+    for (let i = -3; i <= 3; i++) dot(x + dx * i, y + dy * i, 5, OUT);
+    for (let i = -3; i <= 3; i++) dot(x + dx * i, y + dy * i, 3, mid);
+    for (let i = -2; i <= 2; i++) dot(x + dx * i, y + dy * i - 1, 1, hi);
+    dot(x + dx * 3, y + dy * 3, 1, c.dead ? OUT : "#ffffff");
+  }
+  const bx = Math.round(x), by = Math.round(y);
+  if (c.dead) { R(ctx, bx - 2, by - 9, 1, 1, "#ffffff"); R(ctx, bx + 2, by - 9, 1, 1, "#ffffff"); R(ctx, bx - 1, by - 8, 1, 1, "#ffffff"); R(ctx, bx + 1, by - 8, 1, 1, "#ffffff"); R(ctx, bx, by - 7, 1, 1, "#ffffff"); R(ctx, bx - 1, by - 6, 1, 1, "#ffffff"); R(ctx, bx + 1, by - 6, 1, 1, "#ffffff"); R(ctx, bx - 2, by - 5, 1, 1, "#ffffff"); R(ctx, bx + 2, by - 5, 1, 1, "#ffffff"); return; }   // lysed
+  if (c.maxHp > 1) { const fr = Math.max(0, c.hp / c.maxHp), w = Math.max(1, Math.round(9 * fr)); R(ctx, bx - 6, by - 9, 11, 3, OUT); R(ctx, bx - 5, by - 8, w, 1, fr > 0.6 ? "#5be37d" : fr > 0.3 ? "#ffd23f" : "#ff5d5d"); }      // health
+  if (c.panic > 0.8 && (ph & 1)) { R(ctx, bx + 7, by - 9, 1, 3, "#ff5d5d"); R(ctx, bx + 7, by - 5, 1, 1, "#ff5d5d"); }                                                    // alarm
+  if (c.fed) { const k = ph & 3; R(ctx, bx - 8 + k, by - 6 - k, 1, 3, "#ffffff"); R(ctx, bx - 9 + k, by - 5 - k, 3, 1, "#ffffff"); }                                          // feeding
+  if (c.spec.isPlayer) { const ay = by - 15 - ((ph >> 2) & 1); R(ctx, bx - 3, ay - 1, 7, 3, OUT); R(ctx, bx - 2, ay + 2, 5, 1, OUT); R(ctx, bx - 1, ay + 3, 3, 1, OUT); R(ctx, bx, ay + 4, 1, 1, OUT);
+    R(ctx, bx - 2, ay, 5, 1, "#ffd23f"); R(ctx, bx - 1, ay + 1, 3, 1, "#ffd23f"); R(ctx, bx, ay + 2, 1, 1, "#ffd23f"); }
+}
+function drawDish(t) {
+  const cv = $("#dish"), ctx = cv.getContext("2d"), st = stageNow();
+  if (ui.terrainFor !== st.id) { ui.terrain = buildTerrain(st); ui.terrainFor = st.id; }
+  ctx.drawImage(ui.terrain[REDUCE ? 0 : Math.floor(t * 2.5) & 1], 0, 0);
+  const gx = DC + PD.GOAL.x * DS, gy = DC + PD.GOAL.y * DS, gr = PD.GOAL.r * DS, ph = Math.floor(t * 8);
+  for (let j = -15; j <= 15; j += 3) R(ctx, DC + PD.START.x * DS - 7, DC + j, 1, 2, "#ffffff");                                       // inoculation line
+  ringPx(ctx, gx, gy, gr + 1, OUT); ringPx(ctx, gx, gy, gr, "#ffd23f"); ringPx(ctx, gx, gy, gr - 1, OUT);
+  if (!REDUCE) ringPx(ctx, gx, gy, gr + 3 + (ph % 6) * 1.5, "#fff6c9", 4, ph);                                                         // the goal pulses outward
+  R(ctx, gx - 1, gy - 3, 2, 6, OUT); R(ctx, gx - 3, gy - 1, 6, 2, OUT); R(ctx, gx - 1, gy - 2, 2, 4, ph & 2 ? "#ffffff" : "#ffd23f"); R(ctx, gx - 2, gy - 1, 4, 2, ph & 2 ? "#ffffff" : "#ffd23f");
+  const r = ui.race, cells = r ? r.cells : (ui.specs || PD.lineup(save, st)).map((spec, i, a) => ({ spec, i, x: PD.START.x, y: (i - (a.length - 1) / 2) * 7, h: 0, tumble: 0, mode: "swim", hp: 1, maxHp: 1, panic: 0 }));
+  ui.trails.forEach((tr, i) => { ctx.fillStyle = cellCol(cells[i].spec)[i ? "lo" : "mid"]; for (let j = 0; j < tr.length; j += 2) ctx.fillRect(Math.round(DC + tr[j] * DS), Math.round(DC + tr[j + 1] * DS), 1, 1); });
+  for (let i = cells.length - 1; i >= 0; i--) drawRaceCell(ctx, cells[i], cellCol(cells[i].spec), REDUCE ? 0 : t);
+  if (r && r.done && !r.timeout) { const w = r.cells[r.winner]; ringPx(ctx, DC + w.x * DS, DC + w.y * DS, 9 + (ph & 3), "#ffffff", 6, ph); }
+}
+
+/* ================================================================ big sprites of the three starters (also used on the map) */
+function drawBug(ctx, kind, cx, cy, t, flip) {
+  const P = BUGCOL[kind], ph = REDUCE ? 0 : Math.floor(t * 9), W = "#ffffff";
+  const r = (x, y, w, h, c) => R(ctx, flip ? cx - x - w : cx + x, cy + y, w, h, c);
+  const eyes = (x1, x2, y, hgt) => { const blink = ph % 28 === 0; for (const x of [x1, x2]) { if (blink) r(x, y + hgt - 1, 2, 1, OUT); else { r(x, y, 2, hgt, W); r(x + 1, y + 1, 1, hgt - 1, OUT); } } };
+  if (kind === "spirochaeta") {
+    const off = i => Math.round(Math.sin(i * 0.75 - ph * 0.8) * 2.6), hy = off(7);
+    for (let i = -12; i <= 7; i++) r(i, off(i) - 2, 1, 5, OUT);
+    r(-13, off(-12) - 1, 1, 3, OUT); r(7, hy - 3, 6, 7, OUT); r(13, hy - 2, 1, 5, OUT);
+    for (let i = -12; i <= 7; i++) { r(i, off(i) - 1, 1, 3, P.mid); r(i, off(i) - 1, 1, 1, P.hi); r(i, off(i) + 1, 1, 1, P.lo); }
+    r(8, hy - 2, 5, 5, P.mid); r(8, hy - 2, 5, 1, P.hi); r(8, hy + 2, 5, 1, P.lo); eyes(9, 11, hy - 1, 2);
+  } else if (kind === "bacillus") {
+    const tails = [[-8, -2, -0.35, 0], [-8, 1, 0.35, 2], [-3, -5, -0.75, 4], [-3, 4, 0.75, 1], [3, -5, -0.9, 3], [3, 4, 0.9, 5]];
+    for (const [sx, sy, drift, k] of tails) for (let j = 1; j <= 7; j++) r(sx - j, sy + Math.round(Math.sin(j * 1.0 + ph * 1.2 + k) * 1.4 + drift * j), 1, 1, P.hi);     // flagella all over the cell
+    r(-6, -5, 12, 10, OUT); r(-8, -3, 16, 6, OUT); r(-7, -4, 14, 8, OUT);
+    r(-6, -4, 12, 8, P.mid); r(-7, -3, 14, 6, P.mid); r(-5, -4, 10, 1, P.hi); r(-6, -3, 3, 1, P.hi); r(-6, 3, 12, 1, P.lo); r(-7, 1, 2, 2, P.lo);
+    eyes(1, 4, -2, 3); r(2, 2, 3, 1, OUT);
+  } else if (kind === "luca") {
+    for (let j = 1; j <= 9; j++) r(-6 - j, Math.round(Math.sin(j * 0.85 + ph * 1.3) * 1.6), 1, 1, P.hi);                                                                  // one plain flagellum
+    r(-4, -5, 8, 10, OUT); r(-6, -3, 12, 6, OUT); r(-5, -4, 10, 8, OUT);
+    r(-4, -4, 8, 8, P.mid); r(-5, -3, 10, 6, P.mid); r(-3, -4, 6, 1, P.hi); r(-4, -3, 2, 1, P.hi); r(-4, 3, 8, 1, P.lo); r(-5, 1, 1, 2, P.lo);
+    eyes(0, 3, -2, 2);
+    for (let k = 0; k < 5; k++) { const a = (ph * 0.35 + k * 1.2566); r(Math.round(Math.cos(a) * 11), Math.round(Math.sin(a) * 8), 1, 1, k & 1 ? "#ffd23f" : P.hi); }      // specks of the soup it came from
+  } else {
+    for (let k = 0; k < 3; k++) for (let j = 1; j <= 8; j++) r(-7 - j, k - 1 + Math.round(Math.sin(j * 0.9 + ph * 1.4 + k * 2) * 1.3 + (k - 1) * j * 0.3), 1, 1, P.hi);   // a tuft at one pole
+    r(-5, -4, 10, 8, OUT); r(-7, -2, 14, 4, OUT); r(-6, -3, 12, 6, OUT);
+    r(-5, -3, 10, 6, P.mid); r(-6, -2, 12, 4, P.mid); r(-4, -3, 8, 1, P.hi); r(-5, -2, 2, 1, P.hi); r(-5, 2, 10, 1, P.lo);
+    eyes(1, 4, -2, 2);
+    for (let k = 0; k < 2; k++) { const y = -7 - ((ph + k * 2) % 4); r(-3 + k * 5, y, 2, 1, "#ffe9c2"); r(-3 + k * 5 + ((ph >> 1) & 1), y - 1, 1, 1, "#ffe9c2"); }        // heat shimmer
+  }
+}
+function drawPortraits(t) { $$("canvas.bugcv").forEach(cv => { const c = cv.getContext("2d"); c.clearRect(0, 0, 36, 24); drawBug(c, cv.dataset.bug, 20, 13, t, false); }); }
+
+/* ================================================================ the overworld: Earth in a Mercator projection, 75 N to 77.7 S so that Antarctica is on the map */
+const WW = 320, WH = 216, LATN = 75;
+const merc = d => Math.log(Math.tan(Math.PI / 4 + Math.max(-88, Math.min(88, d)) * Math.PI / 360)), MY0 = merc(LATN), PXR = WW / (2 * Math.PI);
+const proj = (lon, lat) => [(lon + 180) / 360 * WW, (MY0 - merc(lat)) * PXR];
+const latAt = y => (2 * Math.atan(Math.exp(MY0 - y / PXR)) - Math.PI / 2) * 180 / Math.PI;
+/* coastlines as longitude, latitude pairs: coarse on purpose, one pixel is about a degree */
+const LAND = [
+  [-168,66, -162,70, -156,71, -141,70, -128,70, -115,68, -108,68, -95,68, -88,64, -94,59, -88,56, -82,52, -79,51, -78,56, -77,62, -72,62, -65,60, -62,57, -56,52, -59,49, -64,49, -66,45, -60,46, -65,43.5, -70,43, -70,41.7, -74,40.5, -75.5,36, -81,31.5, -80,25.5, -81.5,25.5, -82.8,29, -85,30, -89.5,29.5, -94,29.5, -97.3,27, -97.5,22, -95,18.5, -91,18.5, -90,21, -87,21.3, -88,16, -83.5,15, -83.5,11, -81,9, -79,9.5, -77,8, -78,7, -80.5,7.5, -83,8.3, -85.5,10.5, -87.5,13, -91,14, -94.5,16, -99,16.8, -104.5,19, -105.5,22, -109,26.5, -112.5,30.5, -114.7,31.6, -112.5,28, -110,24, -110,23, -112,25, -114.5,28, -116,30.5, -117.2,32.6, -120.5,34.5, -122.3,37, -124,40.3, -124,46, -123,48.3, -127.5,50.5, -130,54, -134,58, -139,60, -146,61, -151,59.5, -158,56.5, -162,55, -158,58.5, -162,60, -166,62, -161,64.3, -165,64.5],
+  [-77,8, -72,12, -68,11.5, -62,10.5, -60,8.5, -57,6, -52,5, -50,0.5, -48,-1, -44,-2.5, -40,-3, -35,-5.5, -35,-9, -37,-12, -39,-17, -41,-22, -44,-23, -48,-26, -49,-29, -52,-33, -54,-34.5, -58,-34.5, -57,-38, -62,-39, -65,-41, -63.5,-42.5, -65,-45, -67.5,-46.5, -66,-48, -69,-51, -68.5,-52.5, -65.5,-55, -70,-55, -74,-52, -75.5,-48, -74,-44, -73.5,-40, -73,-37, -71.5,-30, -70.5,-24, -70.5,-18, -76,-14, -79,-8, -81,-5, -80,-2, -80,1, -77.5,4, -78,7],
+  [-6,35.8, -2,35.2, 3,37, 10,37.3, 11,33.7, 15,32.5, 19.5,30.5, 20,32.6, 25,32, 30,31.3, 32.5,31.2, 32.6,29.9, 35,25, 37,21, 39,16, 43,12.5, 45,11, 51,12, 49,7, 47,4, 42,-1.5, 40,-5, 39,-9, 40.5,-13, 40,-16, 35.5,-20, 35,-24, 33,-26, 31,-30, 27,-33.8, 22,-34.4, 20,-34.8, 18.3,-33.8, 17,-30, 15,-27, 14,-22, 12,-17, 13.5,-12, 12,-6, 9,-1, 9.5,3.5, 8,4.5, 5,6, 1,6, -4,5, -8,4.5, -11,7, -14,10, -17,14.7, -16.5,19, -17,21, -15,26, -12,28, -10,30, -9.5,32.5],
+  [-9,37, -9.5,43, -2,43.5, -1.5,46.5, -4.7,48.5, -1.5,48.7, -1.5,49.7, 1.5,50.9, 4,52, 5,53.4, 8.5,53.8, 8.3,57, 10.5,57.7, 10.5,55.5, 12.5,54.3, 14,54, 18.5,54.7, 21,55.5, 21.5,57.5, 24,58, 23.5,59.5, 28,59.8, 30,60, 25,60.2, 22.5,60, 21,61, 21.5,63, 25,65, 22,65.8, 21,64.5, 17.5,62.5, 17,60.5, 18.5,59.5, 16.5,57.5, 14,55.5, 13,55.5, 12,56.5, 11,59, 10,59, 8,58, 5.5,59, 5,61.5, 7,63, 10,64, 13,66, 15,68.5, 19,70, 25,71, 30,70, 33,69.5, 41,67, 44,66.5, 44,68, 53,68.5, 60,69, 67,69, 69,73, 73,71.5, 74,72.5, 80,73.5, 87,75.5, 100,76.5, 113,74, 110,73.5, 125,73.5, 130,71, 140,72.5, 150,71.5, 160,70, 170,69.5, 180,69, 187,66.5, 190,66, 187,64.5, 182,65, 179,62.5, 172,61, 170,60, 164,59.8, 162.5,57, 162,54.5, 157,51, 155.7,55, 157,58, 160,61, 156,61.5, 150,59.5, 143,59.3, 141,57, 135,54.5, 140,53, 141,50, 140,48, 138,46, 133,43, 130,42, 128,40, 129,37, 129,35.2, 126.5,34.5, 126.5,37.5, 125,39.5, 122,40.5, 121.5,39, 118,39, 119,37.3, 122.5,37, 120,35.5, 121.5,31.5, 122,29, 119.5,25.5, 116.5,23, 113.5,22, 110.5,21, 108,21.5, 106,19, 108.5,15.5, 109.3,12.5, 107,10.5, 105,8.7, 105,10, 102.5,12, 100.5,13.5, 99.5,11, 100.5,7, 103.5,1.5, 101.5,2.8, 100.3,5.5, 98.3,8, 98.5,12, 97.5,16.5, 94.5,16, 94,19, 92,21.5, 91,22.5, 88.5,21.7, 86.5,20, 82.5,16.5, 80.2,13, 80,10, 77.5,8, 76,10, 74.5,14, 73,17.5, 72.8,20.5, 70.5,21, 69,22.5, 67,24.5, 62,25, 57.5,25.5, 56.5,27, 54,26.7, 51,28, 50,30, 48.5,30, 48.5,28.5, 50,26.5, 51.5,25, 54,24, 56.3,26.2, 56.5,24.5, 59.8,22.5, 58,20, 55,17, 52,16, 46,13, 44.2,12.9, 42.8,16, 39.3,21.5, 35,28, 34.2,27.8, 32.6,30, 32.5,31.2, 34.3,31.3, 35.5,33.5, 36,36, 32,36, 30.5,36.5, 27.5,37, 26.5,39, 26.5,40, 29,41, 26,40.8, 24,40.8, 23,40, 24,38, 22.8,36.5, 21.2,37.5, 20,39.5, 19.5,41.8, 18,42.7, 15,44.5, 13.7,45.6, 12.4,45.3, 12.5,44, 13.8,43, 16,41.8, 18.5,40.2, 17,40.4, 16.5,39.5, 17,38.9, 16,38, 15.7,40, 14,40.8, 12.2,41.8, 10.3,43.5, 9,44.3, 7.5,43.7, 5,43.3, 3,43, 3.2,41.8, 0.5,40.5, -0.3,39.3, -0.5,38, -2,36.8, -5.3,36.1, -6.3,36.7, -7.5,37.1],
+  [113.5,-22, 116.5,-20.5, 121,-19.5, 122.3,-17, 125.5,-14.2, 127.5,-14, 129.5,-15, 130.8,-12.5, 132.5,-11.2, 136.5,-12, 136,-13.5, 135.5,-15, 137.5,-16, 140,-17.5, 141.5,-15, 141.7,-12.5, 142.5,-10.7, 143.5,-14, 145.3,-15, 146,-18.5, 148.5,-20, 150.8,-23.3, 153,-25.5, 153.5,-28.5, 152.5,-32.5, 151.2,-34, 150,-37.3, 147,-38.5, 146.3,-39, 144.5,-38.3, 141,-38.2, 139.5,-36, 138.5,-35.3, 137,-35.5, 135.5,-34.8, 134,-32.8, 131,-31.5, 126,-32.2, 124,-33, 120,-34, 118,-35, 115.2,-34.3, 115.7,-31.5, 114.3,-27.5, 113.3,-25.5],
+  [-180,-78, -170,-78, -160,-77.5, -150,-77, -140,-75, -130,-74.5, -120,-74, -110,-74.5, -100,-73, -90,-73, -80,-73.5, -75,-72, -70,-70, -66,-66.5, -62,-64.5, -57,-63.5, -59,-66, -62,-70, -60,-75, -50,-77.5, -40,-78, -35,-77.5, -28,-76, -20,-73.5, -10,-71, 0,-70, 10,-70, 20,-70, 30,-69, 40,-68.5, 50,-67, 55,-66, 60,-67.5, 70,-68, 75,-69.5, 80,-67.5, 90,-66.5, 100,-66, 110,-66, 120,-66.5, 130,-66, 140,-66.5, 150,-68, 160,-70, 165,-71, 170,-72, 170,-77.5, 180,-78, 180,-88, -180,-88],
+  [-73,78, -60,82, -30,83.5, -18,80, -20,74, -22,70, -26,68.5, -32,68, -40,65, -43,60, -48,61, -52,65, -54,69, -58,75, -68,76],
+  [-88,73, -80,73.5, -72,71, -62,66.5, -65,62.5, -72,63.5, -78,65, -73,68, -82,70], [-118,71.5, -110,73, -102,71, -105,69, -115,69.2], [-59,47.6, -56,51.5, -53,48.5, -53,46.7, -56,46.8],
+  [-85,22, -80,23, -75,20.5, -77.5,19.9, -82,21.5], [-74.4,19.8, -70,19.8, -68.5,18.5, -71.5,17.8, -74.4,18.4],
+  [-5.7,50, -3,50.6, 1.4,51.3, 1.7,52.7, 0,53.5, -1.5,55, -2,56, -1.8,57.6, -3.5,58.6, -5,58.5, -6.2,57, -5,56, -5,54.8, -3,54, -3.2,53.3, -4.6,53.2, -4.2,52.2, -5.2,51.8, -3,51.4, -4.5,51],
+  [-10,51.6, -6.2,52.2, -6,54, -5.5,54.8, -7.3,55.3, -8.5,54.5, -10,54.2, -9.5,53, -10.3,52], [-24,65.5, -22,66.4, -16,66.5, -13.6,65, -15,64.2, -19,63.4, -22.5,63.9, -22,64.8],
+  [12.5,38, 15.6,38.2, 15.1,36.7, 12.5,37.6], [8.2,39, 9.6,39.2, 9.7,41, 9.4,43, 8.6,42.3, 8.2,40.8],
+  [49.3,-12, 50.5,-15.5, 49,-19, 47.5,-24.5, 45,-25.5, 43.5,-22, 44.5,-17, 47,-14.5], [80,9.7, 81.8,7.5, 80.5,6, 79.7,8],
+  [130,31.3, 131.5,31.5, 132,33.5, 134.5,33.8, 136.8,34.5, 139,35, 140.8,35.7, 141,38.3, 142,39.6, 141.5,41.4, 140,41, 139.8,38.5, 137,37, 136,35.7, 133,35.5, 131,34.3, 129.7,33.2],
+  [140,41.6, 141,43.2, 141.7,45.4, 145.5,43.5, 143.3,42, 141,42.3], [142,46, 143.5,49.5, 142.7,54, 142,52, 142,48], [120.2,23, 121.5,25.2, 121.8,24, 120.8,22],
+  [120.5,18.5, 122.2,18.3, 122,16, 124,13, 121,13.7, 120,16], [122,7, 126.3,9.5, 126.2,6.5, 124,6],
+  [95.3,5.6, 100,2.2, 104.5,-2.5, 106,-5.9, 102.5,-4.5, 98.5,1, 95.3,5], [105.5,-6.5, 111,-6.5, 114.5,-7.5, 114.3,-8.6, 108,-7.8, 105.3,-6.9],
+  [109,1.5, 114,4.5, 117,7, 119,5, 117.8,1, 116.3,-3.5, 114.5,-4, 110.5,-3, 109,0], [119.5,0.5, 124.5,1.2, 121,0, 123,-1, 121.5,-2, 122.8,-4.5, 120.5,-5.5, 119.5,-3],
+  [131,-0.8, 137.5,-1.6, 141,-2.6, 145.8,-5, 147.5,-6.5, 150.8,-10.3, 147,-9.5, 143,-9, 138,-8.2, 137.5,-5, 133,-4, 132,-2.5], [116,-8.3, 124,-8.3, 127,-8.5, 124,-10, 118,-9],
+  [144.7,-40.8, 148.3,-40.9, 148,-43.2, 146.5,-43.6, 145.3,-42.2],
+  [172.7,-34.4, 174.5,-36.3, 176,-37.6, 178.3,-37.7, 177,-39.5, 175.3,-41.6, 175,-40.2, 173.8,-39.3, 174.8,-37.8, 173,-35.2],                    // New Zealand, North Island
+  [172.7,-40.5, 174.3,-41.8, 173,-43.7, 171,-45.5, 170.6,-45.9, 168.5,-46.6, 166.5,-46, 168,-44.3, 170.5,-43, 171.7,-41.5]                      // New Zealand, South Island
+];
+const INLAND = [[28,41.3, 28.6,43.8, 30,45.8, 33,46, 33.5,44.5, 36,45, 37.5,46.8, 39,47, 38,44.5, 41.5,42, 41.5,41.3, 38,41, 35,42, 31,41.2], [47,45.5, 51,47, 53,45, 51,43.5, 52.5,41, 54,39.5, 53.8,37, 50,37, 49,38.5, 49.5,40.5, 47.5,43]];   // Black Sea, Caspian
+const PLACES = [{ lon: 151.2, lat: -33.9, home: true, place: "Sydney" }, { lon: 10, lat: 23, stage: 0 }, { lon: -62, lat: -3, stage: 1 }, { lon: -18.5, lat: 64.8, stage: 2 }, { lon: 10, lat: -72, stage: 3 }];
+const NODES = PLACES.map(p => { const q = proj(p.lon, p.lat); return Object.assign({ x: Math.round(q[0]), y: Math.round(q[1]) }, p); });
+const ROUTES = [[[151.2, -33.9], [146, -44], [118, -40], [85, -22], [58, -6], [44, 8], [28, 16], [10, 23]], [[10, 23], [-8, 21], [-22, 12], [-36, 3], [-50, -1], [-62, -3]],
+  [[-62, -3], [-56, 10], [-52, 24], [-44, 42], [-32, 56], [-18.5, 64.8]], [[-18.5, 64.8], [-14, 48], [-27, 30], [-29, 4], [-18, -26], [-4, -50], [8, -64], [10, -72]]];
+const PATHS = ROUTES.map(r => r.map(q => proj(q[0], q[1])));
+const PPTS = PATHS.map(p => { const out = []; for (let i = 0; i < p.length - 1; i++) { const [ax, ay] = p[i], [bx, by] = p[i + 1], n = Math.ceil(Math.hypot(bx - ax, by - ay)); for (let j = 0; j < n; j++) out.push([ax + (bx - ax) * j / n, ay + (by - ay) * j / n]); } out.push(p[p.length - 1]); return out; });
+function landMask() {
+  const cv = document.createElement("canvas"); cv.width = WW; cv.height = WH; const c = cv.getContext("2d");
+  const trace = (poly, off, stroke) => { c.beginPath(); for (let i = 0; i < poly.length; i += 2) { const q = proj(poly[i] + off, poly[i + 1]); if (i) c.lineTo(q[0], q[1]); else c.moveTo(q[0], q[1]); } c.closePath(); c.fill(); if (stroke) c.stroke(); };
+  c.fillStyle = c.strokeStyle = "#fff"; c.lineWidth = 0.8; for (const p of LAND) for (const off of [-360, 0, 360]) trace(p, off, true);
+  c.globalCompositeOperation = "destination-out"; for (const p of INLAND) trace(p, 0, false);
+  const d = c.getImageData(0, 0, WW, WH).data, m = new Uint8Array(WW * WH); for (let i = 0; i < m.length; i++) m[i] = d[i * 4 + 3] > 96 ? 1 : 0; return m;
+}
+/* what covers the land at a place: ice, taiga, grassland, desert, rainforest or high plateau */
+function biome(lon, lat, x, y) {
+  const n = Math.sin(x * 0.37 + y * 0.21) * 2 + Math.sin(x * 0.11 - y * 0.29) * 2, la = lat + n * 0.6, lo = lon + n, inb = (a, b, c, d) => lo > a && lo < b && la > c && la < d;
+  if (la < -60 || la > 68 || inb(-75, -15, 59.5, 90)) return "cold";
+  if (inb(-17, 35, 16, 31) || inb(35, 59, 13, 31) || inb(50, 70, 28, 44) || inb(76, 112, 37, 46) || inb(117, 142, -31, -19) || inb(-117, -101, 23, 37) || inb(12, 26, -30, -17) || inb(-72, -64, -52, -36) || inb(-72, -68.5, -30, -15)) return "sand";
+  if (inb(-79, -46, -15, 7) || inb(-95, -77, 7, 19) || inb(8, 31, -7, 7) || inb(-15, 8, 4, 9) || inb(93, 155, -11, 23)) return "high";
+  if (inb(76, 103, 28, 37)) return "firm";
+  return la > 50 ? "tall" : "grass";
+}
+function peak(ctx, cx, top, h, body, light, cap) { for (let i = 0; i < h; i++) { const w = 2 + i * 2; R(ctx, cx - w / 2 - 1, top + i, w + 2, 1, OUT); } R(ctx, cx - h - 1, top + h, h * 2 + 2, 1, OUT);
+  for (let i = 0; i < h; i++) { const w = 2 + i * 2; R(ctx, cx - w / 2, top + i, w, 1, i < 2 ? cap : body); if (i >= 2) R(ctx, cx - w / 2, top + i, Math.ceil(w / 2) - 1, 1, light); } }
+function buildWorld() {
+  const mask = landMask(), n = WW * WH, kinds = new Array(n), near = new Uint8Array(n), out = [], eqY = Math.round(proj(0, 0)[1]);
+  const L = (x, y) => y >= 0 && y < WH && mask[y * WW + ((x + WW) % WW)] === 1;
+  for (let y = 0; y < WH; y++) for (let x = 0; x < WW; x++) { const i = y * WW + x;
+    if (mask[i]) kinds[i] = biome(x / WW * 360 - 180, latAt(y + 0.5), x, y);
+    else { let d = 0; for (let oy = -2; oy <= 2 && d !== 1; oy++) for (let ox = -2; ox <= 2; ox++) if (L(x + ox, y + oy)) { if (Math.abs(ox) < 2 && Math.abs(oy) < 2) { d = 1; break; } d = 2; } near[i] = d; } }
+  for (let f = 0; f < 2; f++) {
+    const cv = document.createElement("canvas"); cv.width = WW; cv.height = WH; const ctx = cv.getContext("2d"), img = ctx.createImageData(WW, WH), d = img.data;
+    for (let y = 0; y < WH; y++) { const lat = latAt(y + 0.5), polar = lat > 69 || lat < -61; for (let x = 0; x < WW; x++) {
+      const i = y * WW + x; let c;
+      if (mask[i]) { const k = kinds[i]; let ix = tileIx(k, x, y, f); if (!L(x + 1, y) || !L(x, y + 1)) ix = 3; else if (!L(x - 1, y) || !L(x, y - 1)) ix = 2; c = PALRGB[k][ix]; }   // dark shore below and right, lit shore above and left
+      else if (near[i] === 1) c = ((x + y + f * 2) & 3) < 2 ? SEA[4] : SEA[3];                                                              // surf
+      else if (near[i] === 2) c = SEA[3];
+      else if (polar && hash(x, y, 31) < 0.07) c = SEA[4];                                                                                    // pack ice
+      else if (y === eqY && (x & 3) === 0) c = SEA[2];                                                                                        // the equator
+      else { const o = (x + (y >> 2) * 5 + f * 4) & 15; c = (y & 3) === 1 && o < 5 ? SEA[2] : (y & 3) === 2 && o > 10 ? SEA[1] : SEA[0]; }
+      d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; d[i * 4 + 3] = 255;
+    } }
+    ctx.putImageData(img, 0, 0);
+    const river = pts => { for (let i = 0; i < pts.length - 1; i++) { const a = proj(pts[i][0], pts[i][1]), b = proj(pts[i + 1][0], pts[i + 1][1]), m = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1])); for (let j = 0; j <= m; j++) R(ctx, Math.round(a[0] + (b[0] - a[0]) * j / m), Math.round(a[1] + (b[1] - a[1]) * j / m), 1, 1, "#5fa8ee"); } };
+    river([[-76, -5], [-68, -3.5], [-60, -3], [-54, -2], [-50, -0.5]]); river([[31, 30.5], [32, 24], [33, 16], [32, 6]]); river([[-90, 29.5], [-91, 36], [-93, 44]]); river([[14, -5], [20, 1], [26, 0]]); river([[121, 31.5], [112, 30], [104, 29]]);
+    for (const [lon, lat, h, kind] of [[80, 31.5, 5, 0], [88, 30, 6, 0], [97, 31, 5, 0], [-70, -13, 5, 0], [-69.5, -27, 5, 0], [-71, -41, 4, 0], [-113, 46, 5, 0], [-121, 56, 5, 0], [-106, 37, 4, 0], [9.5, 47, 4, 0], [43, 42.5, 3, 0], [37, -3, 4, 0], [138.5, 36, 3, 1], [60, -71, 4, 2], [125, -70, 4, 2], [-105, -76.5, 3, 2], [-42, 71, 4, 2], [168, -44.5, 3, 0]]) {
+      const q = proj(lon, lat); peak(ctx, Math.round(q[0]), Math.round(q[1]) - h, h, kind === 2 ? "#9fb9d6" : "#6f6a78", kind === 2 ? "#dcebfa" : "#a39eac", kind === 1 ? (f ? "#ffb03a" : "#ff6b2a") : "#ffffff"); }
+    for (const [lon, lat] of [[-40, -60], [62, -58], [152, -61], [-128, -65], [-152, 72.5], [2, 73.5], [-95, -66]]) { const q = proj(lon, lat), x = Math.round(q[0]), y = Math.round(q[1]); R(ctx, x, y - 1, 2, 1, "#ffffff"); R(ctx, x - 1, y, 4, 2, "#ffffff"); R(ctx, x - 1, y + 2, 4, 1, "#8fcaf2"); }   // icebergs
+    { const q = proj(-128, -40), x = Math.round(q[0]), y = Math.round(q[1]);                                                                // compass rose in the South Pacific
+      R(ctx, x, y - 7, 1, 15, "#e2f4ff"); R(ctx, x - 7, y, 15, 1, "#e2f4ff"); R(ctx, x - 1, y - 3, 3, 7, "#e2f4ff"); R(ctx, x - 3, y - 1, 7, 3, "#e2f4ff"); R(ctx, x, y - 6, 1, 6, "#ff6b5d"); R(ctx, x, y, 1, 1, "#1e4a94");
+      for (const o of [-3, 3]) for (const p of [-3, 3]) R(ctx, x + o, y + p, 1, 1, "#4c86dd"); }
+    { const h = NODES[0], x = h.x - 19, y = h.y - 9;                                                                                       // Atlas Lab: a small plant by Sydney; its smoke and window are drawn each frame
+      R(ctx, x, y + 2, 13, 9, OUT); R(ctx, x + 1, y + 3, 11, 2, "#8a94a8"); R(ctx, x + 1, y + 5, 11, 5, "#566074"); R(ctx, x + 8, y - 3, 4, 6, OUT); R(ctx, x + 9, y - 2, 2, 5, "#8e96a8"); R(ctx, x + 7, y + 6, 3, 4, "#2b3140");
+      for (let k = 0; k < 6; k++) R(ctx, x + 1 + k * 2, y + 10, 1, 1, k & 1 ? "#ffd23f" : "#2a2238"); }
+    out.push(cv);
+  }
+  return out;
+}
+const DIGITS = { 1: ["010", "110", "010", "010", "111"], 2: ["111", "001", "111", "100", "111"], 3: ["111", "001", "111", "001", "111"], 4: ["101", "101", "111", "001", "001"] };
+function pathPos(seg, s, rev) { const pp = PPTS[seg], i = Math.max(0, Math.min(pp.length - 1, Math.round(rev ? pp.length - 1 - s : s))); return pp[i]; }
+function playerPos() { const w = ui.walk; if (!w) return [NODES[save.at].x, NODES[save.at].y, save.at === 0 ? -1 : 1]; const seg = Math.min(w.from, w.to), rev = w.to < w.from, p = pathPos(seg, w.s, rev), q = pathPos(seg, w.s + 3, rev); return [p[0], p[1], q[0] >= p[0] ? 1 : -1]; }
+function drawWorld(t) {
+  const cv = $("#world"), ctx = cv.getContext("2d"); if (!ui.world) ui.world = buildWorld();
+  const f = REDUCE ? 0 : Math.floor(t * 2) & 1, ph = REDUCE ? 0 : Math.floor(t * 8), max = maxNode();
+  ctx.drawImage(ui.world[f], 0, 0);
+  PPTS.forEach((pp, s) => {                                                                                                               // routes: bright dots when open, dull and barred when closed
+    let lit = s < max ? pp.length : 0; if (ui.unlock && ui.unlock.seg === s) { lit = Math.max(0, Math.floor(pp.length * Math.min(1, (t - ui.unlock.t0) / 1.6))); if (lit >= pp.length) ui.unlock = null; }
+    for (let i = 4; i < pp.length - 4; i += 5) { const x = Math.round(pp[i][0]), y = Math.round(pp[i][1]); R(ctx, x - 2, y - 2, 4, 4, OUT); R(ctx, x - 1, y - 1, 2, 2, i < lit ? (((i / 5 + ph) | 0) % 6 === 0 ? "#ffffff" : "#ffd23f") : "#6b6690"); }
+    if (!lit) { const b = pp[Math.min(11, pp.length - 1)], bx = Math.round(b[0]), by = Math.round(b[1]); R(ctx, bx - 6, by - 5, 13, 6, OUT); for (let k = 0; k < 11; k++) R(ctx, bx - 5 + k, by - 4, 1, 4, ((k + (ph >> 2)) >> 1) & 1 ? "#ffd23f" : "#2a2238"); R(ctx, bx - 5, by + 1, 2, 3, OUT); R(ctx, bx + 4, by + 1, 2, 3, OUT); }
+  });
+  { const h = NODES[0], x = h.x - 19, y = h.y - 9; R(ctx, x + 2, y + 6, 4, 2, ph & 4 ? "#8fe6ff" : "#5ad1ff"); for (let k = 0; k < 3; k++) { const a = (ph + k * 4) % 12; R(ctx, x + 9 + ((a >> 2) & 1), y - 4 - a, 2 + (a > 6 ? 1 : 0), 2, a > 8 ? "rgba(240,240,255,.5)" : "#e8ecf5"); } }
+  { const v = NODES[3]; for (let k = 0; k < 3; k++) { const a = (ph + k * 5) % 15; R(ctx, v.x - 9 + ((a >> 2) & 1), v.y - 2 - a, 2, 2, a > 9 ? "rgba(90,70,80,.45)" : "#6b5560"); } R(ctx, v.x - 10, v.y - 1, 4, 3, OUT); R(ctx, v.x - 9, v.y - 1, 2, 1, ph & 2 ? "#ffb03a" : "#ff6b2a"); }   // Iceland smokes
+  NODES.forEach((nd, i) => {
+    const won = !nd.home && save.won >= i, open = i <= max, x = nd.x, y = nd.y, fill = nd.home ? "#5ad1ff" : won ? "#5be37d" : open ? (ph & 4 ? "#ffd23f" : "#fff3a6") : "#6b6690";
+    R(ctx, x - 3, y - 5, 7, 11, OUT); R(ctx, x - 5, y - 3, 11, 7, OUT); R(ctx, x - 4, y - 4, 9, 9, OUT);
+    R(ctx, x - 3, y - 4, 7, 9, fill); R(ctx, x - 4, y - 3, 9, 7, fill); R(ctx, x - 3, y - 3, 2, 1, "#ffffff");
+    if (nd.home) { R(ctx, x, y - 2, 1, 5, OUT); R(ctx, x - 2, y, 5, 1, OUT); }
+    else DIGITS[i].forEach((row, ry) => { for (let rx = 0; rx < 3; rx++) if (row[rx] === "1") R(ctx, x - 1 + rx, y - 2 + ry, 1, 1, OUT); });
+    if (!nd.home && open) {                                                                                                               // a flag: red while the stage is open, chequered once it is won
+      R(ctx, x + 5, y - 16, 3, 13, OUT); R(ctx, x + 6, y - 15, 1, 12, "#f6f1dd"); const wv = won ? 0 : (ph >> 1) & 1; R(ctx, x + 7, y - 16 + wv, 9, 7, OUT);
+      for (let fy = 0; fy < 5; fy++) for (let fx = 0; fx < 7; fx++) R(ctx, x + 8 + fx, y - 15 + wv + fy, 1, 1, won ? (((fx >> 1) + (fy >> 1)) & 1 ? "#1a1226" : "#ffffff") : fy === 0 ? "#ffa59c" : "#ff5d5d");
+    } else if (!nd.home) { R(ctx, x - 3, y - 13, 7, 6, OUT); R(ctx, x - 2, y - 12, 5, 4, "#b8b1d6"); R(ctx, x - 2, y - 16, 5, 4, OUT); R(ctx, x - 1, y - 15, 3, 3, "#b8b1d6"); R(ctx, x, y - 14, 1, 2, OUT); R(ctx, x, y - 11, 1, 2, OUT); }   // padlock
+  });
+  const [px, py, dir] = playerPos(), bump = t - ui.bump < 0.35 ? ((ph & 1) ? 2 : -2) : 0, bob = ui.walk ? (ph & 1) : (ph >> 2) & 1;
+  R(ctx, px - 6, py + 2, 12, 2, "rgba(10,10,30,.4)"); drawBug(ctx, save.starter || "bacillus", Math.round(px) + bump, Math.round(py) - 9 - bob, t, dir < 0);
+  for (const [cx0, cy, sp] of [[20, 86, 3], [150, 150, 2], [250, 60, 4]]) { const cx = ((cx0 + (REDUCE ? 0 : t * sp)) % (WW + 40)) - 30;                 // blocky clouds drift west to east
+    R(ctx, cx + 4, cy, 14, 2, "#ffffff"); R(ctx, cx, cy + 2, 26, 4, "#ffffff"); R(ctx, cx + 2, cy + 6, 20, 2, "#cfe6ff"); R(ctx, cx + 8, cy - 2, 6, 2, "#ffffff"); }
+}
+
+/* ================================================================ chrome */
+function statRows(stats, base) {
+  return '<ul class="stats">' + PD.STAT_KEYS.map(k => { const v = Math.max(0, Math.min(10, stats[k])), b = base ? Math.min(base[k], v) : v; let pips = "";
+    for (let i = 1; i <= 10; i++) pips += '<i class="' + (i <= b ? "b" : i <= v ? "u" : "") + '"></i>';
+    return '<li><span title="' + esc(PD.STAT_HELP[k]) + '">' + PD.STAT_NAMES[k] + '</span><span class="pips" aria-hidden="true">' + pips + '</span><span class="n">' + stats[k] + "</span></li>"; }).join("") + "</ul>";
+}
+function renderWallet() { $("#wPts").textContent = save.points.toLocaleString("en-US"); $("#wStars").textContent = save.stars; }
+function renderTitle() {
+  const cur = save.starter && PD.STARTERS[save.starter];
+  $("#title").innerHTML = '<h1 class="logo">PETRI DASH</h1><p class="sub">A BACTERIAL DRAG RACE IN FOUR PLATES</p>' +
+    (cur ? '<div class="cont"><button class="btn pri big" type="button" id="cont">Continue as ' + cur.name + '</button><span class="note">' + (save.won ? save.won + " of 4 stages cleared" : "No stage cleared yet") + "</span></div>" : "") +
+    '<p class="blink">' + (cur ? "OR PICK A NEW STARTER" : "PICK YOUR STARTER") + '</p><div class="starters">' +
+    Object.keys(PD.STARTERS).map(id => { const s = PD.STARTERS[id];
+      return '<article class="card starter"><div class="stage"><canvas class="bugcv" data-bug="' + id + '" width="36" height="24" role="img" aria-label="' + s.name + ' sprite"></canvas></div><h2>' + s.name.toUpperCase() + '</h2><p class="mute">' + s.phylum + "</p>" + statRows(s.stats, null) +
+        '<p class="perk"><b>' + s.perkName + ".</b> " + s.perkText + '</p><p class="note">Runs ' + s.run.toFixed(1) + " s between tumbles · 100 health · " + (s.home ? "home stage " + s.home + ", " + PD.STAGES[s.home - 1].name : "no home stage") + '</p><button class="btn' + (cur ? "" : " pri") + '" type="button" data-pick="' + id + '">' + (ui.confirmPick === id ? "Confirm: replace my save" : "Select " + s.name) + "</button></article>"; }).join("") +
+    '</div><p class="note">You never steer. Each cell tumbles its own way: more when it is hurt, less when it is fed. Buy parts with points earned in Petri Dash Vault, press Run and watch.</p>';
+}
+function renderNodeBox() {
+  const nd = NODES[save.at], max = maxNode(); let h;
+  if (nd.home) h = '<h2>ATLAS LAB, SYDNEY</h2><p>Points and stars are made here, by playing Petri Dash Vault. Finish a session there, copy its record, and bank it in the Shop tab.</p><div class="row"><a class="btn pri" href="' + VAULT_URL + '" target="_blank" rel="noopener">Play Petri Dash Vault</a><button class="btn" type="button" id="enter">Bank a session</button></div>';
+  else { const st = PD.STAGES[nd.stage], won = save.won >= st.id;
+    h = "<h2>STAGE " + st.id + ": " + st.name.toUpperCase() + '</h2><span class="chip ' + (won ? "ok" : "open") + '">' + (won ? "CLEARED" : st.experimental ? "OPEN - EXPERIMENTAL" : "OPEN") + "</span><p>" + st.blurb + '</p><p class="mute">Site: ' + st.place + ". New here: " + st.feature.toLowerCase() + ". Rivals: " + st.rivals.map(r => PD.RIVALS[r].name).join(", ") + '.</p><div class="row"><button class="btn pri" type="button" id="enter">Enter stage</button></div>'; }
+  $("#nodeBox").innerHTML = h + '<div class="row"><button class="btn sm" type="button" data-go="-1"' + (save.at === 0 ? " disabled" : "") + '>Back</button><button class="btn sm" type="button" data-go="1"' + (save.at === 4 ? " disabled" : "") + '>Onward</button></div><p class="msg">' + esc(ui.msg) + '</p><p class="note">Arrow keys or a tap on a dot move your cell. Enter, or a tap on your own dot, goes in. The road past stage ' + max + (max < 4 ? " stays barred until you win it." : " is the end of this prototype.") + "</p>";
+}
+const LEG = { low: ["Starved lawn", "slows; Fuel economy resists"], high: ["Fed colony", "+25% speed, heals, calms"], gel: ["Gel", "slows; Torque resists"], hot: ["Vent", "slows and wounds; Thermal resists"], cold: ["Ice", "slows and wounds; Thermal resists"], toxin: ["Antibiotic", "slows and wounds every cell"], soft: ["Wet apron", "swim at 20%"], firm: ["Firm agar", "swim at 5%"] };
+function renderHead() {
+  const st = stageNow(); $("#stName").textContent = "STAGE " + st.id + ": " + st.name.toUpperCase(); $("#stBlurb").textContent = st.blurb;
+  let p = ""; for (let i = 0; i < 3; i++) p += '<i class="' + (i < ui.wins ? "w" : i < ui.wins + ui.losses ? "l" : "") + '"></i>'; $("#pips").innerHTML = p;
+  const t = ui.race ? ui.race.t : 0; $("#clock").textContent = Math.floor(t / 60) + ":" + String(Math.floor(t % 60)).padStart(2, "0");
+}
+function renderLegend() {
+  const kinds = []; stageNow().patches.forEach(p => { if (!kinds.includes(p.kind)) kinds.push(p.kind); });
+  $("#legend").innerHTML = kinds.map(k => '<li><canvas width="16" height="16" data-sw="' + k + '"></canvas><b>' + LEG[k][0] + "</b><span>" + LEG[k][1] + "</span></li>").join("") + '<li><span>The pale dither thickens toward the goal: that is the attractant.</span></li>';
+  $$("#legend canvas").forEach(cv => { const c = cv.getContext("2d"), k = cv.dataset.sw; for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) R(c, x, y, 1, 1, PAL[k][tileIx(k, x + 8, y + 8, 0)]); });
+}
+function renderCtl() {
+  const run = $("#run"), st = stageNow(); run.disabled = ui.phase === "running"; $("#skip").disabled = ui.phase !== "running"; $("#toMap").disabled = ui.phase === "running";
+  run.textContent = ui.phase === "running" ? "Heat " + ui.heat + " running" : ui.phase === "between" ? "Run heat " + (ui.heat + 1) : ui.phase === "over" ? "Run stage again" : "Run stage";
+  const fb = $("#fb"), f = ui.fb || { cls: "info", head: "BEST OF THREE HEATS", body: "Win two heats against every rival on the plate to open the road. The first cell into the ring wins a heat, and a cell whose health runs out is lost." };
+  fb.className = "fb " + f.cls; fb.innerHTML = "<b>" + esc(f.head) + "</b>" + esc(f.body);
+}
+const WHERE = { "": "swimming", high: "feeding", low: "short of fuel", gel: "in gel", hot: "in the heat", cold: "in the cold", toxin: "in antibiotic", soft: "stalled on wet apron", firm: "stalled on firm agar" };
+const DIED = { hot: "in the heat", cold: "in the cold", toxin: "in the antibiotic" };
+const MODE = { swarm: "swarming", twitch: "twitching", glide: "gliding" };
+function renderStand() {
+  const specs = ui.specs || PD.lineup(save, stageNow());
+  $("#stand").innerHTML = specs.map((s, i) => { const st = s.stats;
+    return '<li id="row' + i + '"><span class="dot" style="background:' + cellCol(s).mid + '"></span><span class="who"><b>' + (s.isPlayer ? "YOU: " : "") + esc(s.name).toUpperCase() + "</b><span>Speed " + st.speed + " · Torque " + st.torque + " · Sensing " + st.sensing + " · Fuel " + st.fuel + " · Thermal " + st.thermal + (s.module ? " · " + PD.MODULE_NAMES[s.module] : "") + '</span></span><span class="live"><b id="d' + i + '">' + Math.round(PD.distGoal({ x: PD.START.x, y: 0 })) + ' u</b><i class="hpb" title="Health"><i id="h' + i + '"></i></i><span id="w' + i + '">at the start</span></span></li>'; }).join("");
+  updateLive();
+}
+function updateLive() {
+  const r = ui.race; if (!r) return; let lead = 0; r.cells.forEach(c => { if (PD.distGoal(c) < PD.distGoal(r.cells[lead])) lead = c.i; });
+  r.cells.forEach(c => { const d = $("#d" + c.i), w = $("#w" + c.i), row = $("#row" + c.i); if (!d) return;
+    d.textContent = c.done ? "GOAL" : c.dead ? "LYSED" : Math.round(PD.distGoal(c)) + " u";
+    const hb = $("#h" + c.i), fr = c.hp / c.maxHp; if (hb) { hb.style.width = Math.round(fr * 100) + "%"; hb.style.background = fr > 0.6 ? "var(--ok)" : fr > 0.3 ? "var(--gold)" : "var(--hot)"; }
+    w.textContent = c.dead ? "lysed" : c.done ? "finished" : c.mode !== "swim" ? MODE[c.mode] : c.fed ? "feeding, calm" : c.panic > 0.8 ? "panicking " + (WHERE[c.where] || "") : c.tumble > 0 && !c.where ? "tumbling" : WHERE[c.where] || "swimming";
+    row.classList.toggle("lead", c.i === lead); });
+}
+function nextPrice(p) {                                                // a starter with a discount (LUCA) pays less: points to the nearest 5, stars rounded up
+  const t = save.tiers[p.id] || 0, k = PD.STARTERS[save.starter].discount || 1, pts = v => v ? Math.round(v * k / 5) * 5 : v, st = v => v ? Math.ceil(v * k) : v;
+  return p.tiers ? (t < p.tiers ? { points: pts(PD.TIER_PRICE[t]), need: t } : null) : { points: pts(p.points), stars: st(p.stars), need: p.after };
+}
+function partState(p) {
+  const owned = p.tiers ? (save.tiers[p.id] || 0) >= p.tiers : !!save.owned[p.id], pr = nextPrice(p);
+  if (owned) return { label: p.tiers ? "Maxed" : "Owned", ok: false, done: true };
+  if (save.won < pr.need) return { label: "Buy", ok: false, why: "After stage " + pr.need, pr };
+  if (pr.points && save.points < pr.points) return { label: "Buy", ok: false, why: "Need " + (pr.points - save.points) + " more points", pr };
+  if (pr.stars && save.stars < pr.stars) return { label: "Buy", ok: false, why: "Need " + (pr.stars - save.stars) + " more stars", pr };
+  return { label: "Buy", ok: true, pr };
+}
+function paneCell() {
+  const s = PD.STARTERS[save.starter], spec = PD.playerSpec(save), own = save.owned, mods = PD.PARTS.filter(p => p.module && own[p.id]);
+  return '<div class="cellhead"><canvas class="bugcv" data-bug="' + save.starter + '" width="36" height="24" aria-hidden="true"></canvas><div><h3>' + s.name.toUpperCase() + '</h3><p class="mute">' + s.phylum + "</p></div></div>" +
+    '<p class="perk"><b>' + s.perkName + ".</b> " + s.perkText + "</p>" + statRows(spec.stats, save.override ? spec.stats : s.stats) +
+    '<p class="note">' + (save.override ? "Lab override is on: these are the bench values, not what you bought." : "Cream pips are the starter's own. Blue pips are bought.") + "</p>" +
+    '<div class="field"><span class="lab">Tumbling (built in, not a setting)</span><p>Runs about ' + spec.run.toFixed(1) + " s between tumbles. Harm makes it tumble up to " + (1 + PD.TUNE.stress) + " times as often and flick back from the edge of danger" + (spec.adapt ? ", but it adapts within about a second" : "") + '. On food it tumbles 60% less.</p></div>' +
+    '<div class="field"><span class="lab">Health</span><p>' + spec.maxHp + ' health. Antibiotic, heat and cold drain it, faster the less the cell resists them. Fed colonies restore it. At zero the cell lyses and the heat is lost.</p></div>' +
+    (mods.length ? '<div class="field"><span class="lab">Surface module (one per race)</span><div class="seg" role="group" aria-label="Surface module"><button type="button" data-mod="" aria-pressed="' + (!spec.module) + '">None</button>' + mods.map(p => '<button type="button" data-mod="' + p.module + '" aria-pressed="' + (spec.module === p.module) + '">' + PD.MODULE_NAMES[p.module] + "</button>").join("") + "</div></div>" : "") +
+    '<div class="row"><button class="btn sm" type="button" id="toTitle">Title screen</button><button class="btn sm" type="button" id="reset">' + (ui.confirmReset ? "Confirm: wipe this save" : "Wipe save") + "</button></div>";
+}
+function paneVault() {
+  const b = ui.bank;
+  return '<div class="vault"><h3>PETRI DASH VAULT</h3><p>Points and stars are earned in the Vault, by checking real flagellar motor entries for the Atlas. Ten rounds make a session.</p>' +
+    '<div class="row"><a class="btn pri" href="' + VAULT_URL + '" target="_blank" rel="noopener">Play Petri Dash Vault<small>opens in a new tab</small></a></div>' +
+    '<div class="field"><label class="lab" for="recIn">Bank a finished session</label><p class="note">At the end of a Vault session press Copy on the session record, then paste it here.</p><textarea id="recIn" rows="3" spellcheck="false" autocomplete="off" placeholder="# Atlas spot-the-difference session ...">' + esc(ui.recDraft || "") + '</textarea>' +
+    '<div class="row"><button class="btn" type="button" id="bank">Bank session</button><span class="bankmsg ' + (b ? b.cls : "") + '" role="status">' + (b ? esc(b.text) : "") + "</span></div></div></div>";
+}
+function parseRecord(txt) {                                            // reads the header a Vault session record carries: its value, its submitted rounds, and a seed and date that identify it
+  const t = String(txt || "");
+  if (!/^#\s*(Atlas spot-the-difference|Petri Dash Vault) session/mi.test(t)) return null;
+  const v = /estimated value (\d+) points/.exec(t), r = /(\d+) of (\d+) rounds submitted/.exec(t), sd = /^- Seed:\s*(\S+)/m.exec(t), dt = /^- Date:\s*(.+?)\s*$/m.exec(t);
+  if (!v || !r || !sd || !dt) return null;
+  const rounds = +r[2], stars = +r[1], points = +v[1];
+  if (!(rounds >= 1 && rounds <= 20) || stars > rounds || points > rounds * 100) return null;
+  return { points, stars, key: sd[1] + "@" + dt[1] };
+}
+function bankRecord() {
+  const el = $("#recIn"), rec = parseRecord(el ? el.value : ui.recDraft), had = save.banked || [];
+  if (!rec) ui.bank = { cls: "bad", text: "That does not read as a Vault session record. Copy the whole record, from its first line." };
+  else if (had.includes(rec.key)) ui.bank = { cls: "bad", text: "That session is already banked." };
+  else { save.banked = had.concat(rec.key).slice(-300); save.points += rec.points; save.stars += rec.stars; persist(); ui.recDraft = ""; ui.bank = { cls: "ok", text: "Banked: +" + rec.points + " points, +" + rec.stars + " stars." }; renderWallet(); }
+  renderPane();
+}
+function paneShop() {
+  return paneVault() + '<h3>PARTS</h3><p class="note">Points buy stat tiers. Stars buy what points cannot. New shelves open as stages are won.' + (PD.STARTERS[save.starter].discount ? " Root stock: prices shown are already 25% lower." : "") + '</p><ul class="shop">' + PD.PARTS.map(p => {
+    const stt = partState(p), t = save.tiers[p.id] || 0, pr = stt.pr;
+    const fx = p.tiers ? (p.hp ? "+" + p.hp + " max health" : "+1 " + PD.STAT_NAMES[p.stat]) + " per tier · tier " + Math.min(t + 1, p.tiers) + " of " + p.tiers + (t ? " (" + t + " owned)" : "") : p.plus ? "+" + p.plus + " " + PD.STAT_NAMES[p.stat] : p.effect;
+    return '<li><div>' + esc(p.name) + '<span class="kind">' + p.type + '</span><div class="fx">' + esc(fx) + '</div></div><div class="buy"><span class="price">' + (stt.done ? "" : pr.points ? pr.points + " points" : pr.stars + " stars") + '</span><button class="btn sm' + (stt.ok ? " pri" : "") + '" type="button" data-buy="' + p.id + '"' + (stt.ok && ui.phase !== "running" ? "" : " disabled") + ">" + stt.label + "</button>" + (stt.why ? '<span class="why">' + stt.why + "</span>" : "") + "</div></li>";
+  }).join("") + "</ul>";
+}
+function paneLab() {
+  const spec = PD.playerSpec(save), e = ui.est, on = !!save.override;
+  return '<h3>LAB BENCH</h3><p class="note">Tools for tuning the design, not part of the game. The estimate runs 300 silent heats of the stage your cell is standing on.</p>' +
+    '<button class="btn" type="button" id="est" style="justify-self:start">Estimate win rate, stage ' + stageNow().id + "</button>" +
+    (e ? '<div class="est"><div><b>' + Math.round(e.heat * 100) + '%</b><span>heats won</span></div><div><b>' + Math.round(e.series * 100) + '%</b><span>best-of-three won</span></div><div><b>' + Math.round(e.median) + ' s</b><span>median heat</span></div></div><p class="note">Stage ' + e.stage + ", " + esc(e.label) + ". Your cell lysed in " + Math.round(e.deaths * 100) + "% of heats" + (e.timeouts > 0.005 ? ", and " + Math.round(e.timeouts * 100) + "% ended with nobody in the goal." : ".") + "</p>" : "") +
+    '<label class="check"><input type="checkbox" id="ovr"' + (on ? " checked" : "") + '>Override my stats</label><div class="sliders">' + PD.STAT_KEYS.map(k => '<label for="sl-' + k + '"><span>' + PD.STAT_NAMES[k] + '</span><input type="range" id="sl-' + k + '" data-sl="' + k + '" min="1" max="10" step="1" value="' + spec.stats[k] + '"' + (on ? "" : " disabled") + '><span id="sv-' + k + '">' + spec.stats[k] + "</span></label>").join("") + '<label for="sl-run"><span>Run length, x0.1 s</span><input type="range" id="sl-run" data-sl="run" min="4" max="25" step="1" value="' + Math.round(spec.run * 10) + '"' + (on ? "" : " disabled") + '><span id="sv-run">' + Math.round(spec.run * 10) + "</span></label></div>" +
+    '<p class="note">With the override on, races and estimates use the slider values. Purchases are kept and come back when it is switched off.</p>';
+}
+function renderPane() { $$("#tabs button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.tab === ui.tab))); $("#pane").innerHTML = ui.tab === "cell" ? paneCell() : ui.tab === "shop" ? paneShop() : paneLab(); }
+function fit() {
+  const fitOne = (cv, w, frame) => { const avail = frame.clientWidth; if (!avail) return; const s = avail >= w * 3 ? 3 : avail >= w * 2 ? 2 : avail / w; cv.style.width = Math.floor(w * s) + "px"; };
+  fitOne($("#dish"), 256, $("#dish").parentElement); const wf = $("#worldFrame"); wf.style.width = ""; const av = wf.parentElement.clientWidth - 24, s = av >= WW * 3 ? 3 : av >= WW * 2 ? 2 : av / WW; $("#world").style.width = Math.floor(WW * s) + "px";
+}
+function renderAll() {
+  renderWallet(); ["title", "map", "stage"].forEach(s => $("#" + s).hidden = s !== ui.screen);
+  const pw = $("#paneWrap"); pw.hidden = ui.screen === "title";
+  if (ui.screen === "title") renderTitle();
+  else { $(ui.screen === "map" ? "#slotMap" : "#slotStage").appendChild(pw); renderPane(); if (ui.screen === "map") renderNodeBox(); else { renderHead(); renderLegend(); renderCtl(); renderStand(); } fit(); }
+  if (REDUCE) paint(0);
+}
+function go(screen, reveal) { ui.screen = screen; if (screen === "map" && ui.unlock) { if (REDUCE) ui.unlock = null; else ui.unlock.t0 = ui.t + 0.7; } renderAll(); if (reveal && !REDUCE) { const m = $("#" + screen); m.classList.remove("reveal"); void m.offsetWidth; m.classList.add("reveal"); } try { window.scrollTo(0, 0); if (screen === "map") $("#world").focus({ preventScroll: true }); } catch (e) { } }
+
+/* ================================================================ walking the map */
+function blocked() { ui.bump = ui.t; ui.msg = "The road is barred. Win stage " + maxNode() + " to open it."; renderNodeBox(); }
+function walkTo(target) {
+  const max = maxNode(); if (ui.walk) { ui.walk.final = target; return; }
+  if (target > max) { if (save.at >= max) { blocked(); return; } target = max; }
+  if (target === save.at || target < 0) return; ui.msg = ""; hop(target);
+}
+function hop(final) { const from = save.at, to = from + (final > from ? 1 : -1); if (REDUCE) { save.at = final; arrive(); return; } ui.walk = { from, to, final, s: 0, len: PPTS[Math.min(from, to)].length - 1 }; }
+function stepWalk(dt) { const w = ui.walk; if (!w) return; w.s += dt * Math.max(64, w.len / 2.4); if (w.s < w.len) return; save.at = w.to; ui.walk = null; const max = maxNode(), fin = Math.min(w.final, max); if (w.final > max) ui.msg = "The road is barred. Win stage " + max + " to open it."; if (fin !== save.at) hop(fin); else arrive(); }
+function arrive() { persist(); const nd = NODES[save.at]; if (!nd.home && ui.stage !== nd.stage) { ui.stage = nd.stage; ui.est = null; resetSeries(); } renderNodeBox(); renderPane(); if (REDUCE) paint(0); }
+function keyMove(k) { let best = 0, bd = 0.25; for (const dir of [1, -1]) { const to = save.at + dir; if (to < 0 || to > 4) continue; const pp = PPTS[Math.min(save.at, to)], a = dir > 0 ? pp[0] : pp[pp.length - 1], b = dir > 0 ? pp[12] : pp[pp.length - 13], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, dp = ((b[0] - a[0]) * k[0] + (b[1] - a[1]) * k[1]) / l; if (dp > bd) { bd = dp; best = dir; } } if (best) walkTo(save.at + best); }
+function enterNode() { if (ui.walk) return; const nd = NODES[save.at]; if (nd.home) { ui.tab = "shop"; ui.msg = ""; renderPane(); const r = $("#recIn"); if (r) try { r.focus(); } catch (e) { } } else { ui.stage = nd.stage; go("stage", true); } }
+
+/* ================================================================ the race: best of three heats */
+function resetSeries() { ui.race = null; ui.specs = null; ui.trails = []; ui.heat = 0; ui.wins = 0; ui.losses = 0; ui.phase = "idle"; ui.fb = null; }
+function sample() { const r = ui.race; if (ui.steps++ % 5) return; r.cells.forEach((c, i) => { const tr = ui.trails[i]; tr.push(c.x, c.y); if (tr.length > 1800) tr.splice(0, 2); }); }
+function startHeat() {
+  if (ui.phase === "over" || ui.phase === "idle") { ui.heat = 0; ui.wins = 0; ui.losses = 0; }
+  ui.heat++; ui.specs = PD.lineup(save, stageNow()); ui.race = PD.newRace(stageNow(), ui.specs, Math.floor(Math.random() * 2147483647));
+  ui.trails = ui.specs.map(() => []); ui.steps = 0; ui.acc = 0; ui.phase = "running";
+  ui.fb = { cls: "info", head: "HEAT " + ui.heat + " OF 3", body: "The cells run, tumble and follow the attractant. Nothing to do but watch." };
+  renderHead(); renderCtl(); renderStand(); renderPane(); if (REDUCE) finishNow();
+}
+function raceStep(dt) { ui.acc += dt * ui.speed; let n = 0; while (ui.acc >= PD.DT && !ui.race.done && n < 40) { PD.step(ui.race); sample(); ui.acc -= PD.DT; n++; } if (ui.frame++ % 6 === 0) { updateLive(); renderHead(); } if (ui.race.done) heatDone(); }
+function finishNow() { if (ui.phase !== "running") return; while (!ui.race.done) { PD.step(ui.race); sample(); } heatDone(); }
+function heatDone() {
+  const r = ui.race, st = stageNow(), won = r.winner === 0, wc = r.cells[r.winner], me = r.cells[0], secs = Math.round(r.t);
+  if (won) ui.wins++; else ui.losses++;
+  let cls = won ? "good" : "bad", head = "HEAT " + ui.heat + ": " + (won ? "YOU WON" : wc.spec.name.toUpperCase() + " WON");
+  let body = r.timeout ? (r.t < PD.CAP - 0.1 ? "Every cell lysed before the goal. " : "Nobody reached the goal in 90 s. ") + (won ? "You were" : wc.spec.name + " was") + (wc.dead ? " the closest wreck." : " the closest survivor.")
+    : won ? "Your " + me.spec.name + " reached the goal in " + secs + " s with " + Math.round(me.hp) + " health left." : me.dead ? "Your cell lysed " + (DIED[me.diedIn] || "on the way") + ". " + wc.spec.name + " reached the goal in " + secs + " s."
+    : "It reached the goal in " + secs + " s. You were " + Math.round(PD.distGoal(me)) + " units short.";
+  if (ui.wins === 2) {
+    ui.phase = "over"; const first = save.won < st.id; if (first) { save.won = st.id; persist(); if (st.id < 4) ui.unlock = { seg: st.id, t0: 1e9 }; }
+    head = "STAGE " + st.id + " WON, " + ui.wins + " HEATS TO " + ui.losses;
+    body += " " + (!first ? "You had already cleared this stage." : st.id === 1 ? "The road to stage 2 opens. Tier 2 parts, switch tuning and the sodium stator set are on the shelf."
+      : st.id === 2 ? "The road to stage 3 opens. Tier 3 parts and three more star parts are on the shelf." : st.id === 3 ? "The road to stage 4 opens as an experiment, and the surface motility modules are on the shelf." : "That is the last stage in this prototype.");
+  } else if (ui.losses === 2) { ui.phase = "over"; head = "STAGE " + st.id + " LOST, " + ui.wins + " HEATS TO " + ui.losses; body += " Bank a Vault session, buy parts, or run it again."; }
+  else ui.phase = "between";
+  ui.fb = { cls, head, body }; renderHead(); renderCtl(); updateLive(); renderPane(); if (REDUCE) paint(0);
+}
+
+/* ================================================================ actions */
+function buy(id) {
+  const p = PD.PARTS.find(q => q.id === id), stt = p && partState(p); if (!stt || !stt.ok || ui.phase === "running") return;
+  if (stt.pr.points) save.points -= stt.pr.points; if (stt.pr.stars) save.stars -= stt.pr.stars;
+  if (p.tiers) save.tiers[p.id] = (save.tiers[p.id] || 0) + 1; else { save.owned[p.id] = true; if (p.module && !save.module) save.module = p.module; }
+  ui.est = null; persist(); refreshLineup(); renderWallet(); renderPane();
+}
+function refreshLineup() { if (ui.phase === "idle" || ui.phase === "over") { ui.specs = null; if (ui.screen === "stage") renderStand(); } }
+function runEstimate() {
+  const b = $("#est"); if (b) { b.disabled = true; b.textContent = "Running 300 heats"; }
+  setTimeout(() => { const st = stageNow(), e = PD.estimate(save, st, 300, Math.floor(Math.random() * 1e9)), spec = PD.playerSpec(save);
+    ui.est = Object.assign(e, { stage: st.id, label: spec.maxHp + " health, runs of " + spec.run.toFixed(1) + " s" + (spec.module ? ", " + PD.MODULE_NAMES[spec.module].toLowerCase() : "") + (save.override ? ", stats overridden" : "") }); renderPane(); }, 30);
+}
+document.addEventListener("click", ev => {
+  const t = ev.target.closest("button"); if (!t) return; const d = t.dataset;
+  if (t.id !== "reset" && ui.confirmReset) ui.confirmReset = false;
+  if (d.pick) {
+    if (save.starter && ui.confirmPick !== d.pick) { ui.confirmPick = d.pick; renderTitle(); return; }
+    save = Object.assign(fresh(), { starter: d.pick, points: save.points, stars: save.stars, banked: save.banked || [] }); ui.confirmPick = null; persist(); ui.stage = 0; ui.est = null; ui.msg = "Walk to the first dot to begin."; resetSeries(); go("map", true);
+  }
+  else if (t.id === "cont") { ui.confirmPick = null; if (NODES[save.at].stage !== undefined) ui.stage = NODES[save.at].stage; go("map", true); }
+  else if (t.id === "earn") { save.points += 500; save.stars += 10; persist(); renderWallet(); if (ui.screen !== "title") renderPane(); }
+  else if (t.id === "enter") enterNode();
+  else if (t.id === "bank") bankRecord();
+  else if (d.go) walkTo(save.at + (+d.go));
+  else if (t.id === "run") startHeat();
+  else if (t.id === "skip") finishNow();
+  else if (t.id === "toMap") { if (ui.phase === "running") return; resetSeries(); ui.msg = ""; go("map", true); }
+  else if (d.spd) { ui.speed = +d.spd; $$("#spd button").forEach(b => b.setAttribute("aria-pressed", String(b === t))); }
+  else if (d.tab) { ui.tab = d.tab; renderPane(); }
+  else if (d.mod !== undefined) { save.module = d.mod || null; ui.est = null; persist(); refreshLineup(); renderPane(); }
+  else if (d.buy) buy(d.buy);
+  else if (t.id === "est") runEstimate();
+  else if (t.id === "toTitle") { if (ui.phase === "running") return; ui.walk = null; go("title"); }
+  else if (t.id === "reset") { if (!ui.confirmReset) { ui.confirmReset = true; renderPane(); } else { ui.confirmReset = false; save = fresh(); persist(); ui.stage = 0; ui.est = null; ui.walk = null; resetSeries(); go("title"); } }
+});
+document.addEventListener("input", ev => {
+  const t = ev.target;
+  if (t.id === "recIn") { ui.recDraft = t.value; ui.bank = null; }
+  else if (t.id === "ovr") { save.override = t.checked ? Object.assign({ run: PD.playerSpec(save).run }, PD.playerSpec(save).stats) : null; ui.est = null; persist(); refreshLineup(); renderPane(); }
+  else if (t.dataset && t.dataset.sl && save.override) { save.override[t.dataset.sl] = t.dataset.sl === "run" ? +t.value / 10 : +t.value; $("#sv-" + t.dataset.sl).textContent = t.value; ui.est = null; persist(); refreshLineup(); }
+});
+document.addEventListener("keydown", ev => {
+  if (ui.screen !== "map" || ev.target.closest("input, textarea, select")) return;
+  const k = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[ev.key];
+  if (k) { ev.preventDefault(); keyMove(k); } else if ((ev.key === "Enter" || ev.key === " ") && !ev.target.closest("button")) { ev.preventDefault(); enterNode(); }
+});
+$("#world").addEventListener("click", ev => {
+  const cv = ev.currentTarget, r = cv.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width * WW, y = (ev.clientY - r.top) / r.height * WH; let best = -1, bd = 22;
+  NODES.forEach((n, i) => { const dd = Math.hypot(n.x - x, n.y - y); if (dd < bd) { bd = dd; best = i; } });
+  if (best < 0) return; if (best === save.at && !ui.walk) enterNode(); else walkTo(best);
+});
+
+/* ================================================================ one loop paints whatever screen is up */
+function paint(t) { ui.t = t; drawPortraits(t); if (ui.screen === "map") drawWorld(t); else if (ui.screen === "stage") drawDish(t); }
+let lastTs = 0;
+function loop(ts) { const dt = lastTs ? Math.min(0.05, (ts - lastTs) / 1000) : 0; lastTs = ts; ui.t = ts / 1000;
+  if (ui.screen === "map") stepWalk(dt); else if (ui.screen === "stage" && ui.phase === "running") raceStep(dt);
+  paint(ui.t); requestAnimationFrame(loop); }
+window.addEventListener("resize", fit);
+if (window.ResizeObserver) new ResizeObserver(fit).observe($(".wrap"));
+renderAll();
+if (!REDUCE) requestAnimationFrame(loop);
+</script>
+
+</body></html>
