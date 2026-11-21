@@ -1382,6 +1382,7 @@ async function pushReport(rep) {
 /* Payout. Each round's estimated value is paid in proportion to the quality of the session: how far the answers on confirmed material (the calibration rounds, the planted intruders,
    the settled entries) sit between chance (0) and full agreement (1). A session at chance keeps PAY_FLOOR of its value. Stars follow the same factor.
    Measured over 1,000 simulated rounds each: a careful player keeps about 87% of the estimated value, a player answering at random about 14%. */
+const PTS_MULT = 4;                                                       // beta: points paid per session are x4 (the raw 0-100 estimate stays in r.value.base)
 const CTL_CHANCE = { O: 0.5, N: 0.2, M: 0.3, G: 0.6 }, PAY_FLOOR = 0.1;
 function sessionQuality(rounds) {
   const sk = []; rounds.forEach(r => { if (r.ctl) sk.push((r.ctl.score - CTL_CHANCE[r.type]) / (1 - CTL_CHANCE[r.type])); else if (r.gold && r.skipped) sk.push(0); });   // a skipped calibration round counts as chance
@@ -1390,12 +1391,12 @@ function sessionQuality(rounds) {
 }
 function settleSession(sess) {                                            // the value of every task is estimated here, after the rounds, then paid by the session's quality
   sess.rounds.forEach(r => r.value = valueOf(r)); const Q = sess.quality = sessionQuality(sess.rounds);
-  sess.rounds.forEach(r => { r.value.base = r.value.points; r.value.points = Math.round(r.value.points * Q.mult); });
+  sess.rounds.forEach(r => { r.value.base = r.value.points; r.value.points = Math.round(r.value.points * Q.mult * PTS_MULT); });
   sess.stars = Math.round(sess.rounds.filter(r => !r.skipped).length * Q.mult);
 }
 async function saveSession(sess, md) {
   const nst = sess.stars != null ? sess.stars : sess.rounds.filter(r => !r.skipped).length, total = sess.rounds.reduce((a, r) => a + r.value.points, 0);
-  const rec = { start: sess.start, end: sess.end, mode: "auto", seed: sess.seed, app: VERSION, total, stars: nst, quality: sess.quality || null, rounds: sess.rounds.map(r => Object.assign({}, r.rec, { value: r.value.points, base: r.value.base, calib: r.calib })) };
+  const rec = { start: sess.start, end: sess.end, mode: "auto", seed: sess.seed, app: VERSION, total, stars: nst, pm: PTS_MULT, quality: sess.quality || null, rounds: sess.rounds.map(r => Object.assign({}, r.rec, { value: r.value.points, base: r.value.base, calib: r.calib })) };
   const rep = { start: sess.start, end: sess.end, total, stars: nst, alias: sess.alias || "anonymous", md, rec, synced: false };
   store("last", { rec, md });
   { const lb = (store("bests") || []).concat([{ start: sess.start, total, stars: nst }]).sort((a, b) => b.total - a.total).slice(0, 10); store("bests", lb); }
@@ -1879,7 +1880,7 @@ async function endSession() {
   settleSession(S);
   const md = buildMd(S), total = S.rounds.reduce((a, r) => a + r.value.points, 0), nsub = S.rounds.filter(r => !r.skipped).length, nstar = S.stars, Q = S.quality;
   e.innerHTML = '<div class="end"><div><h2 style="font-size:clamp(1.6rem,4vw,2.3rem);margin-bottom:6px">' + total + ' points</h2><p class="note">' + nsub + " of " + S.rounds.length + " rounds submitted · " + nstar + (nstar === 1 ? " star" : " stars") + " · " + fmtT(S.end - S.start) + ' · seed <span class="mono">' + S.seed + '</span></p>' +
-    '<p class="note"><b>Quality x' + Q.mult.toFixed(2) + ".</b> " + (Q.n ? "On the confirmed material in " + Q.n + " of your rounds, your answers came " + Math.round(Q.q * 100) + "% of the way from chance to full agreement. " : "No round with confirmed material was answered, so the middle rate applies. ") + "Points and stars are paid in that proportion.</p>" +
+    '<p class="note"><b>Quality x' + Q.mult.toFixed(2) + ".</b> " + (Q.n ? "On the confirmed material in " + Q.n + " of your rounds, your answers came " + Math.round(Q.q * 100) + "% of the way from chance to full agreement. " : "No round with confirmed material was answered, so the middle rate applies. ") + "Points and stars are paid in that proportion, and during the beta every point counts x" + PTS_MULT + ".</p>" +
     '<p class="note">Points estimate how much each submission helps toward a more accurate Atlas: the neediest entries, entries few players have checked, and specific, decisive answers count most. Calibration rounds are checked against confirmed material; nothing else is graded against the current Atlas.</p><div id="board"><p class="note">Loading the leaderboard...</p></div><div class="sum">' +
     S.rounds.map((r, i) => '<div class="r"><span class="mono mute">' + (i + 1) + "</span><span>" + (r.skipped ? "" : STAR.replace('class="star-ico"', 'class="star-sm"')) + TYPE_NAME[r.type] + "<small>" + esc(dsName(r)) + (r.focus ? " · " + esc(r.focus.id) : "") + '</small><small class="why-line">' + esc(r.value.reasons.join(" · ")) + '</small></span><span class="mono">' + r.value.points + "</span></div>").join("") + '</div><div class="bar" style="justify-content:flex-start"><button class="btn pri" id="again" type="button">Play again</button></div><div class="tools" style="margin-top:0;justify-content:flex-start"><button class="btn" id="toDash2" type="button">Back to Petri Dash</button></div><p class="note" id="bankedNote">Adding ' + total + " points and " + nstar + (nstar === 1 ? " star" : " stars") + ' to your Bank...</p><div id="sendRow"></div><p class="note" id="saveNote">Saving the session...</p></div>' +
     '<div><div class="tools" style="margin-top:0"><b>Session record (.md)</b><span class="nicks"><button class="btn pri" id="dl" type="button">Save .md</button><button class="btn" id="cp" type="button">Copy</button></span></div><textarea class="mdbox" id="md" readonly aria-label="Session record"></textarea></div></div>';
@@ -1949,7 +1950,7 @@ const PD = (() => {
   const R = 100, START = { x: -80, y: 0 }, GOAL = { x: 55, y: 0, r: 8 }, CAP = 90, DT = 1 / 60;
   /* every balance number lives here so the Lab panel and the design doc can be kept in step */
   const TUNE = { v0: 6, vPer: 2, gain: 0.4, mem: 0.35, dr: 0.12, tumble: 0.15, highFuel: 1.25, perk: 0.3, twitch: 4, glide: 8, softSwim: 0.2, firmSwim: 0.05,
-    stress: 5, calm: 0.6, escape: 1.5, escapeMax: 0.85, adaptSlow: 6, adaptFast: 1.2, goalLock: 0.8, afterglow: 1.12, glowTime: 8, foodPull: 1.1, drain: 18, regen: 10, hpSlow: 0.3, efflux: 0.5 };
+    stress: 5, calm: 0.6, escape: 1.5, escapeMax: 0.85, adaptSlow: 6, adaptFast: 1.2, goalLock: 0.8, afterglow: 1.12, glowTime: 8, foodPull: 1.1, drain: 6, regen: 10, hpSlow: 0.3, efflux: 0.5 };
   const STAT_KEYS = ["speed", "torque", "sensing", "fuel", "thermal"];
   const STAT_NAMES = { speed: "Speed", torque: "Torque", sensing: "Sensing", fuel: "Fuel economy", thermal: "Thermal tolerance" };
   const STAT_HELP = { speed: "Run speed in plain medium", torque: "Resists gel and mucus", sensing: "How well it holds a course to the goal", fuel: "Resists low-fuel patches", thermal: "Resists hot and cold zones" };
